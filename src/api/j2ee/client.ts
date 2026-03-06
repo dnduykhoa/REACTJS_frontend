@@ -9,4 +9,12 @@ const apiClient = axios.create({
   },
 });
 
+export const cartClient = axios.create({
+  baseURL: BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
 export default apiClient;

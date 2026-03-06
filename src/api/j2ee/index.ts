@@ -7,3 +7,4 @@ export { attributeGroupApi } from './attributeGroupApi';
 export { attributeDefinitionApi } from './attributeDefinitionApi';
 export { categoryAttributeApi } from './categoryAttributeApi';
 export { productApi, productMediaApi, productSpecApi } from './productApi';
+export { cartApi } from './cartApi';
