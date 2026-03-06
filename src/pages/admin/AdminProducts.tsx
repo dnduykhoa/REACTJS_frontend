@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { productApi } from '../../api/j2ee';
 import type { Product } from '../../api/j2ee/types';
+import { Package, Plus, Search, Pencil, Trash2 } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
 function getPrimaryImage(product: Product) {
   const m = product.media?.find((m) => m.isPrimary) || product.media?.[0];
   if (!m) return null;
-  return m.mediaUrl.startsWith('http') ? m.mediaUrl : `${BASE_URL}/uploads/${m.mediaUrl}`;
+  const url = m.mediaUrl;
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${BASE_URL}${url}`;
+  return `${BASE_URL}/${url}`;
 }
 
 export default function AdminProducts() {
@@ -54,110 +58,115 @@ export default function AdminProducts() {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-xl font-bold text-gray-800">Quản lý sản phẩm</h2>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Sản phẩm</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{products.length} sản phẩm</p>
+        </div>
         <Link
           to="/admin/products/new"
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition"
         >
-          + Thêm sản phẩm
+          <Plus size={16} /> Thêm sản phẩm
         </Link>
       </div>
 
-      <form onSubmit={handleSearch} className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo tên..."
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button type="submit" className="bg-gray-100 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
-          Tìm
-        </button>
-        <button type="button" onClick={load} className="px-4 py-2 text-sm text-gray-500 hover:text-blue-600">
-          Xóa lọc
-        </button>
+      <form onSubmit={handleSearch} className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm theo tên sản phẩm..."
+            className="w-full border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          />
+        </div>
+        <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition">Tìm</button>
+        <button type="button" onClick={load} className="px-4 py-2 rounded-xl text-sm text-slate-500 hover:bg-slate-100 border border-slate-200 transition">Xóa lọc</button>
       </form>
 
       {loading ? (
-        <div className="flex justify-center py-10">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600">
-              <tr>
-                <th className="px-4 py-3 text-left w-10">#</th>
-                <th className="px-4 py-3 text-left w-14">Ảnh</th>
-                <th className="px-4 py-3 text-left">Tên sản phẩm</th>
-                <th className="px-4 py-3 text-left">Danh mục</th>
-                <th className="px-4 py-3 text-left">Thương hiệu</th>
-                <th className="px-4 py-3 text-right">Giá</th>
-                <th className="px-4 py-3 text-center">Kho</th>
-                <th className="px-4 py-3 text-center">Trạng thái</th>
-                <th className="px-4 py-3 text-center">Hành động</th>
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-10">#</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-14">Ảnh</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên sản phẩm</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Danh mục</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Thương hiệu</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Giá</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Kho</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Hành động</th>
               </tr>
             </thead>
             <tbody>
               {products.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
-                    Không có sản phẩm
+                  <td colSpan={9} className="px-4 py-12 text-center">
+                    <Package size={32} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-slate-400 text-sm">Không có sản phẩm</p>
                   </td>
                 </tr>
               )}
               {products.map((p, idx) => {
                 const img = getPrimaryImage(p);
                 return (
-                  <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-400">{idx + 1}</td>
-                    <td className="px-4 py-2">
+                  <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-slate-400 tabular-nums">{idx + 1}</td>
+                    <td className="px-4 py-3">
                       {img ? (
-                        <img src={img} alt="" className="w-10 h-10 object-cover rounded" />
+                        <img src={img} alt="" className="w-10 h-10 object-cover rounded-xl" />
                       ) : (
-                        <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-300">
-                          📷
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+                          <Package size={16} className="text-slate-400" />
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-2 max-w-xs">
-                      <span className="line-clamp-1">{p.name}</span>
+                    <td className="px-4 py-3 max-w-xs">
+                      <span className="line-clamp-1 font-medium text-slate-800">{p.name}</span>
                     </td>
-                    <td className="px-4 py-2 text-gray-500">{p.category?.name || '—'}</td>
-                    <td className="px-4 py-2 text-gray-500">{p.brand?.name || '—'}</td>
-                    <td className="px-4 py-2 text-right font-medium text-blue-600">
+                    <td className="px-4 py-3 text-slate-500">{p.category?.name || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500">{p.brand?.name || '—'}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-indigo-600">
                       {Number(p.price).toLocaleString('vi-VN')}₫
                     </td>
-                    <td className="px-4 py-2 text-center">{p.stockQuantity}</td>
-                    <td className="px-4 py-2 text-center">
+                    <td className="px-4 py-3 text-center text-slate-600">{p.stockQuantity}</td>
+                    <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleToggle(p)}
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-semibold transition ${
                           p.isActive
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-500'
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                         }`}
                       >
                         {p.isActive ? 'Hiển thị' : 'Ẩn'}
                       </button>
                     </td>
-                    <td className="px-4 py-2 text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
                         <Link
                           to={`/admin/products/${p.id}/edit`}
-                          className="text-blue-600 hover:underline text-xs"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          title="Chỉnh sửa"
                         >
-                          Sửa
+                          <Pencil size={14} />
                         </Link>
                         <button
                           onClick={() => handleDelete(p.id)}
                           disabled={deleting === p.id}
-                          className="text-red-500 hover:underline text-xs disabled:opacity-50"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                          title="Xóa"
                         >
-                          Xóa
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </td>
