@@ -42,7 +42,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen flex bg-slate-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-950 text-white flex flex-col shrink-0 shadow-2xl">
+      <aside className="w-64 bg-slate-950 text-white flex flex-col shrink-0 shadow-2xl h-screen sticky top-0">
         {/* Brand */}
         <div className="px-5 py-5 border-b border-slate-800">
           <Link to="/" className="flex items-center gap-3">
