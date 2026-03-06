@@ -18,6 +18,14 @@ export const productApi = {
   getByCategory: (categoryId: number) =>
     apiClient.get<ApiResponse<Product[]>>(`/api/products/category/${categoryId}`),
 
+  getByCategoryTree: (categoryId: number) =>
+    apiClient.get<ApiResponse<Product[]>>(`/api/products/category/${categoryId}/with-children`),
+
+  getByCategories: (ids: number[]) =>
+    apiClient.get<ApiResponse<Product[]>>(
+      `/api/products/categories?${ids.map((id) => `ids=${id}`).join('&')}`
+    ),
+
   getByBrand: (brandId: number) =>
     apiClient.get<ApiResponse<Product[]>>(`/api/products/brand/${brandId}`),
 
