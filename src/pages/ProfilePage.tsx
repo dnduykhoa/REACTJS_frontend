@@ -3,6 +3,11 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/j2ee';
 import { useAuth } from '../context/AuthContext';
 import type { UserProfileResponse, UpdateProfileRequest } from '../api/j2ee/types';
+import { User, Mail, Phone, Calendar, Shield, Lock } from 'lucide-react';
+
+const inputClass =
+  'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors';
+const labelClass = 'block text-sm font-semibold text-slate-700 mb-1.5';
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -42,7 +47,6 @@ export default function ProfilePage() {
       const res = await authApi.updateProfile(Number(id), form);
       setProfile(res.data.data);
       setSuccess('Cập nhật thành công!');
-      // Refresh auth state if it's the current user
       if (isOwner && user) {
         login({ ...user, fullName: res.data.data.fullName || null, email: res.data.data.email });
       }
@@ -58,106 +62,128 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      <div className="flex justify-center py-24">
+        <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!profile) {
-    return <p className="text-center text-gray-500 py-10">{error}</p>;
+    return <p className="text-center text-slate-500 py-10">{error}</p>;
   }
 
-  return (
-    <div className="max-w-lg mx-auto px-4 py-8">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Thông tin tài khoản</h2>
+  const initials = (profile.fullName || profile.username).slice(0, 2).toUpperCase();
 
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-10">
+      {/* Profile header */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-5">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl font-bold shrink-0">
+            {initials}
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">{profile.fullName || profile.username}</h2>
+            <p className="text-sm text-slate-500">@{profile.username}</p>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {profile.roles.map((r) => (
+                <span
+                  key={r}
+                  className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                    r === 'ADMIN'
+                      ? 'bg-rose-100 text-rose-700'
+                      : r === 'MANAGER'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-indigo-100 text-indigo-700'
+                  }`}
+                >
+                  <Shield className="w-3 h-3" />
+                  {r}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts */}
       {success && (
-        <div className="mb-4 bg-green-50 border border-green-300 text-green-700 px-4 py-2 rounded text-sm">
-          {success}
+        <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm">
+          ✓ {success}
         </div>
       )}
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-300 text-red-700 px-4 py-2 rounded text-sm">
-          {error}
+        <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm">
+          ⚠ {error}
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow p-6 space-y-4">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
-            {(profile.fullName || profile.username).charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <p className="font-semibold text-gray-800">{profile.username}</p>
-            <p className="text-xs text-gray-400">{profile.roles.join(', ')}</p>
-          </div>
-        </div>
+      {/* Info / Edit form */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2">
+          <User className="w-4 h-4 text-indigo-600" /> Thông tin cá nhân
+        </h3>
 
         {isOwner ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên</label>
-              <input
-                type="text"
-                value={form.fullName || ''}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                required
-                value={form.email || ''}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Số điện thoại
+              <label className={labelClass}>
+                <span className="inline-flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-slate-400" /> Họ và tên</span>
               </label>
-              <input
-                type="tel"
-                value={form.phone || ''}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="text" value={form.fullName || ''} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputClass} placeholder="Nguyễn Văn A" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label>
-              <input
-                type="date"
-                value={form.birthDate || ''}
-                onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className={labelClass}>
+                <span className="inline-flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-400" /> Email <span className="text-rose-500">*</span></span>
+              </label>
+              <input type="email" required value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>
+                  <span className="inline-flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-slate-400" /> Số điện thoại</span>
+                </label>
+                <input type="tel" value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputClass} placeholder="0912 345 678" />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-slate-400" /> Ngày sinh</span>
+                </label>
+                <input type="date" value={form.birthDate || ''} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} className={inputClass} />
+              </div>
             </div>
             <button
               type="submit"
               disabled={saving}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-60"
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-sm"
             >
               {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
             </button>
           </form>
         ) : (
-          <div className="space-y-2 text-sm text-gray-700">
-            <p><strong>Email:</strong> {profile.email}</p>
-            <p><strong>Điện thoại:</strong> {profile.phone || '—'}</p>
-            <p><strong>Ngày sinh:</strong> {profile.birthDate || '—'}</p>
+          <div className="space-y-3 text-sm text-slate-700">
+            <div className="flex items-center gap-3 py-2 border-b border-slate-100">
+              <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+              <div><span className="text-slate-500 text-xs">Email</span><p className="font-medium">{profile.email}</p></div>
+            </div>
+            <div className="flex items-center gap-3 py-2 border-b border-slate-100">
+              <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+              <div><span className="text-slate-500 text-xs">Số điện thoại</span><p className="font-medium">{profile.phone || '—'}</p></div>
+            </div>
+            <div className="flex items-center gap-3 py-2">
+              <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+              <div><span className="text-slate-500 text-xs">Ngày sinh</span><p className="font-medium">{profile.birthDate || '—'}</p></div>
+            </div>
           </div>
         )}
 
         {isOwner && (
-          <div className="pt-2 border-t border-gray-100">
+          <div className="mt-5 pt-5 border-t border-slate-100">
             <Link
               to={`/profile/${id}/change-password`}
-              className="text-sm text-blue-600 hover:underline"
+              className="inline-flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-semibold"
             >
-              Đổi mật khẩu
+              <Lock className="w-4 h-4" /> Đổi mật khẩu
             </Link>
           </div>
         )}

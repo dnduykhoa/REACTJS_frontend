@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { categoryApi, attributeDefinitionApi, categoryAttributeApi } from '../../api/j2ee';
 import type { Category, AttributeDefinition, CategoryAttribute } from '../../api/j2ee/types';
+import { Link2, Plus, Trash2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 
 export default function AdminCategoryAttributes() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -68,22 +69,27 @@ export default function AdminCategoryAttributes() {
   const availableDefs = attrDefs.filter((d) => !assignedIds.has(d.id));
 
   return (
-    <div>
-      <h2 className="text-xl font-bold text-gray-800 mb-5">Thuộc tính theo danh mục</h2>
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Thuộc tính theo danh mục</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Gán thuộc tính vào từng danh mục sản phẩm</p>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Left: Category list */}
-        <div className="bg-white rounded-xl shadow p-4">
-          <h3 className="font-semibold text-gray-700 mb-3 text-sm">Chọn danh mục</h3>
+        <div className="bg-white rounded-2xl border border-slate-100 p-4">
+          <h3 className="font-semibold text-slate-700 mb-3 text-sm flex items-center gap-1.5">
+            <Link2 size={14} className="text-slate-400" /> Chọn danh mục
+          </h3>
           <ul className="space-y-1 max-h-96 overflow-y-auto">
             {categories.map((cat) => (
               <li key={cat.id}>
                 <button
                   onClick={() => handleSelectCategory(cat.id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${
                     selectedCategoryId === cat.id
-                      ? 'bg-blue-600 text-white'
-                      : 'hover:bg-gray-100 text-gray-700'
+                      ? 'bg-indigo-600 text-white font-medium'
+                      : 'hover:bg-slate-100 text-slate-700'
                   }`}
                 >
                   {cat.name}
@@ -98,18 +104,22 @@ export default function AdminCategoryAttributes() {
         <div className="md:col-span-2 space-y-4">
           {selectedCategoryId ? (
             <>
-              <div className="bg-white rounded-xl shadow p-4">
-                <h3 className="font-semibold text-gray-700 mb-3 text-sm">
-                  Gán thuộc tính cho: <span className="text-blue-600">{categories.find((c) => c.id === selectedCategoryId)?.name}</span>
+              <div className="bg-white rounded-2xl border border-slate-100 p-5">
+                <h3 className="font-semibold text-slate-700 mb-3 text-sm">
+                  Gán thuộc tính cho: <span className="text-indigo-600">{categories.find((c) => c.id === selectedCategoryId)?.name}</span>
                 </h3>
-                {error && <div className="mb-3 bg-red-50 border border-red-300 text-red-700 px-3 py-2 rounded text-sm">{error}</div>}
+                {error && (
+                  <div className="mb-3 flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm">
+                    <AlertCircle size={15} className="shrink-0" /> {error}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2 items-end">
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Thuộc tính</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Thuộc tính</label>
                     <select
                       value={attrDefId}
                       onChange={(e) => setAttrDefId(e.target.value)}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                     >
                       <option value="">-- Chọn --</option>
                       {availableDefs.map((d) => (
@@ -118,58 +128,64 @@ export default function AdminCategoryAttributes() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 mb-1">Thứ tự</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Thứ tự</label>
                     <input
                       type="number"
                       value={displayOrder}
                       onChange={(e) => setDisplayOrder(e.target.value)}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="border border-slate-200 rounded-xl px-3 py-2 text-sm w-20 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                     />
                   </div>
-                  <div className="flex items-center gap-1.5 pb-2">
-                    <input type="checkbox" id="reqCheck" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />
-                    <label htmlFor="reqCheck" className="text-sm text-gray-600">Bắt buộc</label>
+                  <div className="flex items-center gap-1.5 pb-0.5">
+                    <input type="checkbox" id="reqCheck" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                    <label htmlFor="reqCheck" className="text-sm text-slate-600">Bắt buộc</label>
                   </div>
                   <button
                     onClick={handleAssign}
                     disabled={assigning}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-60"
+                    className="flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 transition"
                   >
-                    {assigning ? '...' : 'Gán'}
+                    <Plus size={15} /> {assigning ? '...' : 'Gán'}
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <h3 className="font-semibold text-gray-700 text-sm">Thuộc tính đã gán ({assignments.length})</h3>
+              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-slate-100">
+                  <h3 className="font-semibold text-slate-700 text-sm">Thuộc tính đã gán ({assignments.length})</h3>
                 </div>
                 {loadingAssignments ? (
                   <div className="flex justify-center py-6">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600" />
                   </div>
                 ) : assignments.length === 0 ? (
-                  <p className="text-gray-400 text-sm text-center py-6">Chưa gán thuộc tính nào</p>
+                  <p className="text-slate-400 text-sm text-center py-8">Chưa gán thuộc tính nào</p>
                 ) : (
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-500">
-                      <tr>
-                        <th className="px-4 py-2 text-left">Tên</th>
-                        <th className="px-4 py-2 text-left">Key</th>
-                        <th className="px-4 py-2 text-center">Bắt buộc</th>
-                        <th className="px-4 py-2 text-center">Thứ tự</th>
-                        <th className="px-4 py-2 text-center">Xóa</th>
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Key</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Bắt buộc</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Thứ tự</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Xóa</th>
                       </tr>
                     </thead>
                     <tbody>
                       {assignments.map((a) => (
-                        <tr key={a.id} className="border-t border-gray-100 hover:bg-gray-50">
-                          <td className="px-4 py-2 font-medium text-gray-800">{a.attributeDefinition.name}</td>
-                          <td className="px-4 py-2 text-gray-500 font-mono text-xs">{a.attributeDefinition.attrKey}</td>
-                          <td className="px-4 py-2 text-center">{a.isRequired ? '✓' : '—'}</td>
-                          <td className="px-4 py-2 text-center">{a.displayOrder}</td>
-                          <td className="px-4 py-2 text-center">
-                            <button onClick={() => handleRemove(a.id)} className="text-red-500 hover:text-red-700 text-xs">Xóa</button>
+                        <tr key={a.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-slate-800">{a.attributeDefinition.name}</td>
+                          <td className="px-4 py-3 text-slate-500 font-mono text-xs">{a.attributeDefinition.attrKey}</td>
+                          <td className="px-4 py-3 text-center">
+                            {a.isRequired
+                              ? <CheckCircle size={14} className="mx-auto text-emerald-500" />
+                              : <XCircle size={14} className="mx-auto text-slate-300" />}
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-600">{a.displayOrder}</td>
+                          <td className="px-4 py-3 text-center">
+                            <button onClick={() => handleRemove(a.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors">
+                              <Trash2 size={13} />
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -179,8 +195,9 @@ export default function AdminCategoryAttributes() {
               </div>
             </>
           ) : (
-            <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
-              Chọn một danh mục để xem/quản lý thuộc tính
+            <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
+              <Link2 size={32} className="mx-auto text-slate-300 mb-2" />
+              <p className="text-slate-400 text-sm">Chọn một danh mục để xem/quản lý thuộc tính</p>
             </div>
           )}
         </div>
