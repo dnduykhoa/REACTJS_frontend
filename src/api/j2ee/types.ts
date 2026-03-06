@@ -172,3 +172,27 @@ export interface Product {
   createdAt: string;
   updatedAt: string;
 }
+
+// ─── Cart ─────────────────────────────────────────────────────────────────────
+export interface CartItemRequest {
+  productId: number;
+  quantity: number;
+}
+
+export interface CartItemResponse {
+  id: number;
+  product: Product;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  inStock: boolean;
+  availableStock: number;
+}
+
+export interface CartResponse {
+  id: number;
+  userId: number;
+  items: CartItemResponse[];
+  totalItems: number;
+  totalAmount: number;
+}

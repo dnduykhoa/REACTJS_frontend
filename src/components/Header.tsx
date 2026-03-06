@@ -1,10 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 import { useState } from 'react';
-import { Monitor, ChevronDown, LogOut, User, Settings, Shield, Menu, X } from 'lucide-react';
+import { Monitor, ChevronDown, LogOut, User, Settings, Shield, Menu, X, ShoppingCart } from 'lucide-react';
 
 export default function Header() {
   const { user, logout, isAdmin } = useAuth();
+  const { totalItems } = useCart();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -52,6 +54,21 @@ export default function Header() {
 
         {/* User area (desktop) */}
         <div className="hidden md:flex items-center gap-2 shrink-0">
+          {/* Cart icon */}
+          {user && (
+            <Link
+              to="/cart"
+              className="relative p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+              title="Giỏ hàng"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {totalItems > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {totalItems > 99 ? '99+' : totalItems}
+                </span>
+              )}
+            </Link>
+          )}
           {user ? (
             <div className="relative">
               <button
@@ -145,6 +162,10 @@ export default function Header() {
             {user ? (
               <>
                 {isAdmin && <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 rounded-lg">Admin Panel</Link>}
+                <Link to="/cart" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">
+                  <ShoppingCart className="w-4 h-4" />
+                  Giỏ hàng {totalItems > 0 && <span className="ml-auto bg-indigo-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{totalItems}</span>}
+                </Link>
                 <Link to={`/profile/${user.userId}`} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Hồ sơ của tôi</Link>
                 <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 rounded-lg">Đăng xuất</button>
               </>

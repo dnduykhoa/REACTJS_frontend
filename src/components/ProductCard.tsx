@@ -1,6 +1,9 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import type { Product } from '../api/j2ee/types';
-import { Package } from 'lucide-react';
+import { Package, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -17,14 +20,35 @@ function getImageUrl(product: Product) {
 export default function ProductCard({ product }: { product: Product }) {
   const imgUrl = getImageUrl(product);
   const outOfStock = product.stockQuantity === 0;
+  const { user } = useAuth();
+  const { addToCart } = useCart();
+  const navigate = useNavigate();
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(false);
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      setAdding(true);
+      await addToCart(product.id, 1);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 2000);
+    } catch {
+      // silently fail on card — detail page has full error feedback
+    } finally {
+      setAdding(false);
+    }
+  };
 
   return (
-    <Link
-      to={`/products/${product.id}`}
-      className="group bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col"
-    >
+    <div className="group bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col">
       {/* Image */}
-      <div className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden">
+      <Link to={`/products/${product.id}`} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden block">
         {imgUrl ? (
           <img
             src={imgUrl}
@@ -39,7 +63,7 @@ export default function ProductCard({ product }: { product: Product }) {
             Hết hàng
           </span>
         )}
-      </div>
+      </Link>
 
       {/* Content */}
       <div className="p-4 flex flex-col flex-1 gap-1">
@@ -48,9 +72,11 @@ export default function ProductCard({ product }: { product: Product }) {
             {product.brand.name}
           </p>
         )}
-        <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 flex-1 leading-snug">
-          {product.name}
-        </h3>
+        <Link to={`/products/${product.id}`} className="flex-1">
+          <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug hover:text-indigo-600 transition-colors">
+            {product.name}
+          </h3>
+        </Link>
         <div className="flex items-center justify-between mt-2">
           <p className="text-base font-bold text-indigo-600">
             {Number(product.price).toLocaleString('vi-VN')}₫
@@ -61,7 +87,26 @@ export default function ProductCard({ product }: { product: Product }) {
             </span>
           )}
         </div>
+
+        {/* Add to cart button */}
+        <button
+          onClick={handleAddToCart}
+          disabled={outOfStock || adding}
+          className={`mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors
+            ${added
+              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+              : outOfStock
+              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600'
+            }`}
+        >
+          {added ? (
+            <><CheckCircle2 className="w-3.5 h-3.5" /> Đã thêm</>
+          ) : (
+            <><ShoppingCart className="w-3.5 h-3.5" /> {adding ? 'Đang thêm...' : outOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}</>
+          )}
+        </button>
       </div>
-    </Link>
+    </div>
   );
 }

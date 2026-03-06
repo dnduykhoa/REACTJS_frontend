@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { CartProvider } from './context/CartContext';
 import MainLayout from './components/MainLayout';
 import AdminLayout from './components/AdminLayout';
 
@@ -11,6 +12,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import CartPage from './pages/CartPage';
 
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -27,6 +29,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <CartProvider>
         <Routes>
           {/* Public routes */}
           <Route element={<MainLayout />}>
@@ -37,6 +40,7 @@ export default function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/profile/:id" element={<ProfilePage />} />
             <Route path="/profile/:id/change-password" element={<ChangePasswordPage />} />
+            <Route path="/cart" element={<CartPage />} />
           </Route>
 
           {/* Admin routes */}
@@ -53,6 +57,7 @@ export default function App() {
             <Route path="users" element={<AdminUsers />} />
           </Route>
         </Routes>
+        </CartProvider>
       </AuthProvider>
     </BrowserRouter>
   );

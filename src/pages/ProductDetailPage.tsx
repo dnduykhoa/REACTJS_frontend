@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { productApi } from '../api/j2ee';
 import type { Product, ProductMedia } from '../api/j2ee/types';
-import { Package, ChevronRight, CheckCircle2, XCircle, Tag } from 'lucide-react';
+import { Package, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -23,10 +25,16 @@ function Spinner() {
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { addToCart } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeMedia, setActiveMedia] = useState<ProductMedia | null>(null);
   const [error, setError] = useState('');
+  const [qty, setQty] = useState(1);
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [cartMsg, setCartMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -73,6 +81,28 @@ export default function ProductDetailPage() {
   }
 
   const inStock = product.stockQuantity > 0;
+
+  const handleAddToCart = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      setAddingToCart(true);
+      setCartMsg(null);
+      await addToCart(product.id, qty);
+      setCartMsg({ type: 'success', text: 'Đã thêm vào giỏ hàng!' });
+      setTimeout(() => setCartMsg(null), 3000);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Không thể thêm vào giỏ hàng';
+      setCartMsg({ type: 'error', text: msg });
+      setTimeout(() => setCartMsg(null), 3000);
+    } finally {
+      setAddingToCart(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -161,13 +191,55 @@ export default function ProductDetailPage() {
             </p>
           )}
 
-          <div className="mt-auto pt-4">
-            <button
-              disabled={!inStock}
-              className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              {inStock ? 'Thêm vào giỏ hàng' : 'Hết hàng'}
-            </button>
+          <div className="mt-auto pt-4 space-y-3">
+            {/* Quantity selector */}
+            {inStock && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-slate-600">Số lượng:</span>
+                <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setQty((q) => Math.max(1, q - 1))}
+                    className="px-3 py-2 hover:bg-slate-100 transition-colors text-slate-600"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="px-4 py-2 text-sm font-semibold text-slate-800 min-w-[2.5rem] text-center">
+                    {qty}
+                  </span>
+                  <button
+                    onClick={() => setQty((q) => Math.min(product.stockQuantity, q + 1))}
+                    className="px-3 py-2 hover:bg-slate-100 transition-colors text-slate-600"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Cart feedback */}
+            {cartMsg && (
+              <div
+                className={`flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl font-medium ${
+                  cartMsg.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}
+              >
+                {cartMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+                {cartMsg.text}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddToCart}
+                disabled={!inStock || addingToCart}
+                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                {addingToCart ? 'Đang thêm...' : inStock ? 'Thêm vào giỏ hàng' : 'Hết hàng'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
