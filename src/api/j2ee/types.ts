@@ -1,0 +1,174 @@
+// ─── Common ──────────────────────────────────────────────────────────────────
+export interface ApiResponse<T = unknown> {
+  message: string;
+  data: T;
+}
+
+// ─── Auth / User ─────────────────────────────────────────────────────────────
+export interface LoginRequest {
+  usernameOrEmail: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  message: string;
+  userId: number;
+  username: string;
+  email: string;
+  fullName: string | null;
+  phone: string | null;
+  birthDate: string | null; // ISO date "YYYY-MM-DD"
+  roles: string[];
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  confirmPassword: string;
+  email: string;
+  fullName?: string;
+  phone?: string;
+  birthDate?: string; // "YYYY-MM-DD"
+}
+
+export interface UpdateProfileRequest {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  birthDate?: string;
+}
+
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+export interface GoogleLoginRequest {
+  idToken: string;
+}
+
+export interface UserProfileResponse {
+  id: number;
+  username: string;
+  email: string;
+  fullName: string | null;
+  phone: string | null;
+  birthDate: string | null;
+  provider: string;
+  roles: string[];
+}
+
+// ─── Brand ───────────────────────────────────────────────────────────────────
+export interface Brand {
+  id: number;
+  name: string;
+  logoUrl: string | null;
+  description: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Category ────────────────────────────────────────────────────────────────
+export interface Category {
+  id: number;
+  name: string;
+  description: string | null;
+  displayOrder: number;
+  isActive: boolean;
+  parent: Category | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CategoryRequest {
+  name: string;
+  description?: string;
+  displayOrder?: number;
+  isActive?: boolean;
+  parentId?: number | null;
+}
+
+// ─── Attribute Group ─────────────────────────────────────────────────────────
+export interface AttributeGroup {
+  id: number;
+  name: string;
+  description: string | null;
+  displayOrder: number;
+  isActive: boolean;
+}
+
+// ─── Attribute Definition ─────────────────────────────────────────────────────
+export type DataType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'LIST';
+
+export interface AttributeDefinition {
+  id: number;
+  name: string;
+  attrKey: string;
+  dataType: DataType;
+  unit: string | null;
+  isFilterable: boolean;
+  isRequired: boolean;
+  displayOrder: number;
+  isActive: boolean;
+  attributeGroup: AttributeGroup | null;
+}
+
+export interface AttributeDefinitionRequest {
+  name: string;
+  attrKey: string;
+  dataType: DataType;
+  unit?: string;
+  isFilterable?: boolean;
+  isRequired?: boolean;
+  displayOrder?: number;
+  isActive?: boolean;
+  groupId?: number;
+}
+
+// ─── Category Attribute ───────────────────────────────────────────────────────
+export interface CategoryAttribute {
+  id: number;
+  category: Category;
+  attributeDefinition: AttributeDefinition;
+  isRequired: boolean;
+  displayOrder: number;
+}
+
+// ─── Product Media ────────────────────────────────────────────────────────────
+export interface ProductMedia {
+  id: number;
+  mediaUrl: string;
+  mediaType: 'IMAGE' | 'VIDEO';
+  isPrimary: boolean;
+  displayOrder: number;
+  createdAt: string;
+}
+
+// ─── Product Specification ────────────────────────────────────────────────────
+export interface ProductSpecification {
+  id: number;
+  attributeDefinition: AttributeDefinition | null;
+  specKey: string | null;
+  specValue: string | null;
+  valueNumber: number | null;
+  displayOrder: number;
+}
+
+// ─── Product ──────────────────────────────────────────────────────────────────
+export interface Product {
+  id: number;
+  name: string;
+  description: string | null;
+  price: number;
+  stockQuantity: number;
+  category: Category | null;
+  brand: Brand | null;
+  media: ProductMedia[];
+  specifications: ProductSpecification[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
