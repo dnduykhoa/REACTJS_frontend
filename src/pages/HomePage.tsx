@@ -36,12 +36,15 @@ export default function HomePage() {
   return (
     <div>
       {/* ── Hero ── */}
-      <section className="relative bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 overflow-hidden">
-        {/* Decorative circles */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-16 -right-16 w-72 h-72 bg-white/5 rounded-full" />
-          <div className="absolute bottom-0 -left-10 w-56 h-56 bg-white/5 rounded-full" />
-        </div>
+      <section className="relative overflow-hidden">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/image.png')" }}
+        />
+        {/* Overlay để text dễ đọc */}
+        <div className="absolute inset-0 bg-indigo-950/55" />
+
         <div className="relative max-w-7xl mx-auto px-4 py-24 text-center">
           <span className="inline-block bg-white/10 text-white text-xs font-semibold px-3 py-1.5 rounded-full mb-5 tracking-wide uppercase">
             Công nghệ hàng đầu

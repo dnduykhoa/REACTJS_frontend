@@ -186,7 +186,7 @@ export default function AdminCategories() {
                 <tr key={cat.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 text-slate-400 tabular-nums">{idx + 1}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{cat.name}</td>
-                  <td className="px-4 py-3 text-slate-500">{cat.parent ? getCategoryLabel(cat.parent.id) : '—'}</td>
+                  <td className="px-4 py-3 text-slate-500">{cat.parent ? cat.parent.name : '—'}</td>
                   <td className="px-4 py-3 text-center text-slate-600">{cat.displayOrder}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${cat.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
