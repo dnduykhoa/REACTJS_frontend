@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { productApi, categoryApi, brandApi, productSpecApi } from '../../api/j2ee';
-import type { Product, Category, Brand, ProductMedia, ProductSpecification } from '../../api/j2ee/types';
+import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi } from '../../api/j2ee';
+import type { Product, Category, Brand, ProductMedia, ProductSpecification, CategoryAttribute } from '../../api/j2ee/types';
 import { ArrowLeft, AlertCircle, ImageIcon, Trash2, Plus } from 'lucide-react';
 
 const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
@@ -46,6 +46,13 @@ export default function AdminProductForm() {
   const [newSpec, setNewSpec] = useState({ specKey: '', specValue: '', valueNumber: '', displayOrder: '0' });
   const [addingSpec, setAddingSpec] = useState(false);
 
+  // Category attribute state
+  const [categoryAttributes, setCategoryAttributes] = useState<CategoryAttribute[]>([]);
+  // attrDefId → input value string
+  const [attrValues, setAttrValues] = useState<Record<number, string>>({});
+  // attrDefId → existing spec id (for update/delete in edit mode)
+  const [attrSpecIds, setAttrSpecIds] = useState<Record<number, number>>({});
+
   useEffect(() => {
     Promise.all([categoryApi.getAll(), brandApi.getAll()]).then(([c, b]) => {
       setCategories(c.data.data);
@@ -55,7 +62,7 @@ export default function AdminProductForm() {
     if (isEdit && id) {
       setLoading(true);
       Promise.all([productApi.getById(Number(id)), productSpecApi.getByProduct(Number(id))])
-        .then(([pRes, sRes]) => {
+        .then(async ([pRes, sRes]) => {
           const p: Product = pRes.data.data;
           setForm({
             name: p.name,
@@ -67,7 +74,30 @@ export default function AdminProductForm() {
             isActive: p.isActive,
           });
           setExistingMedia(p.media || []);
-          setSpecs(sRes.data.data);
+          const allSpecs: ProductSpecification[] = sRes.data.data;
+          setSpecs(allSpecs);
+
+          // Load category attributes and pre-populate values from existing specs
+          if (p.category) {
+            const caRes = await categoryAttributeApi.getByCategory(p.category.id);
+            const catAttrs = caRes.data.data;
+            setCategoryAttributes(catAttrs);
+
+            const valMap: Record<number, string> = {};
+            const specIdMap: Record<number, number> = {};
+            allSpecs.forEach((spec) => {
+              if (spec.attributeDefinition) {
+                const defId = spec.attributeDefinition.id;
+                const isNumber = spec.attributeDefinition.dataType === 'NUMBER';
+                valMap[defId] = isNumber
+                  ? spec.valueNumber != null ? String(spec.valueNumber) : ''
+                  : spec.specValue || '';
+                specIdMap[defId] = spec.id;
+              }
+            });
+            setAttrValues(valMap);
+            setAttrSpecIds(specIdMap);
+          }
         })
         .finally(() => setLoading(false));
     }
@@ -75,6 +105,23 @@ export default function AdminProductForm() {
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setForm((prev) => ({ ...prev, categoryId: e.target.value }));
+    const catId = Number(e.target.value);
+    if (catId) {
+      categoryAttributeApi.getByCategory(catId).then((res) => {
+        setCategoryAttributes(res.data.data);
+        // Reset values, keeping only those that match the new category's attributes
+        setAttrValues({});
+        setAttrSpecIds({});
+      });
+    } else {
+      setCategoryAttributes([]);
+      setAttrValues({});
+      setAttrSpecIds({});
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -93,11 +140,41 @@ export default function AdminProductForm() {
         deleteMediaIds,
       };
 
+      let productId: number;
       if (isEdit && id) {
         await productApi.update(Number(id), params);
+        productId = Number(id);
       } else {
-        await productApi.create(params);
+        const createRes = await productApi.create(params);
+        productId = createRes.data.data.id;
       }
+
+      // Save category attribute values as product specifications
+      for (const ca of categoryAttributes) {
+        const def = ca.attributeDefinition;
+        const val = (attrValues[def.id] ?? '').trim();
+        const existingSpecId = attrSpecIds[def.id];
+        const isNumber = def.dataType === 'NUMBER';
+
+        if (existingSpecId) {
+          if (val === '') {
+            await productSpecApi.delete(productId, existingSpecId);
+          } else {
+            await productSpecApi.update(productId, existingSpecId, {
+              specValue: isNumber ? undefined : val,
+              valueNumber: isNumber ? Number(val) : undefined,
+            });
+          }
+        } else if (val !== '') {
+          await productSpecApi.add(productId, {
+            attrDefId: def.id,
+            specValue: isNumber ? undefined : val,
+            valueNumber: isNumber ? Number(val) : undefined,
+            displayOrder: ca.displayOrder,
+          });
+        }
+      }
+
       navigate('/admin/products');
     } catch (err: unknown) {
       setError(
@@ -203,7 +280,7 @@ export default function AdminProductForm() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Danh mục</label>
-              <select value={form.categoryId} onChange={set('categoryId')} className={inputClass}>
+              <select value={form.categoryId} onChange={handleCategoryChange} className={inputClass}>
                 <option value="">-- Chọn danh mục --</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -222,6 +299,71 @@ export default function AdminProductForm() {
             <span className="text-sm text-slate-700">Hiển thị sản phẩm</span>
           </label>
         </div>
+
+        {/* Category Attributes */}
+        {categoryAttributes.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+            <div>
+              <h2 className="font-semibold text-slate-800">Thuộc tính sản phẩm</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Các thuộc tính theo danh mục đã chọn</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {categoryAttributes
+                .slice()
+                .sort((a, b) => a.displayOrder - b.displayOrder)
+                .map((ca) => {
+                  const def = ca.attributeDefinition;
+                  const val = attrValues[def.id] ?? '';
+                  const setVal = (v: string) =>
+                    setAttrValues((prev) => ({ ...prev, [def.id]: v }));
+                  const fieldLabel = `${def.name}${def.unit ? ` (${def.unit})` : ''}`;
+                  return (
+                    <div key={ca.id}>
+                      <label className={labelClass}>
+                        {fieldLabel}
+                        {ca.isRequired && <span className="text-rose-500 ml-0.5">*</span>}
+                        {def.attributeGroup && (
+                          <span className="ml-1.5 text-xs text-slate-400 font-normal">
+                            — {def.attributeGroup.name}
+                          </span>
+                        )}
+                      </label>
+                      {def.dataType === 'BOOLEAN' ? (
+                        <select
+                          value={val}
+                          onChange={(e) => setVal(e.target.value)}
+                          required={ca.isRequired}
+                          className={inputClass}
+                        >
+                          <option value="">-- Chọn --</option>
+                          <option value="true">Có</option>
+                          <option value="false">Không</option>
+                        </select>
+                      ) : def.dataType === 'NUMBER' ? (
+                        <input
+                          type="number"
+                          value={val}
+                          onChange={(e) => setVal(e.target.value)}
+                          required={ca.isRequired}
+                          placeholder={`Nhập${def.unit ? ' ' + def.unit : ''}`}
+                          className={inputClass}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={val}
+                          onChange={(e) => setVal(e.target.value)}
+                          required={ca.isRequired}
+                          placeholder={`Nhập ${def.name.toLowerCase()}`}
+                          className={inputClass}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
 
         {/* Media */}
         <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
