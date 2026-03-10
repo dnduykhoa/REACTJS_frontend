@@ -21,7 +21,7 @@ export default function HomePage() {
 
   useEffect(() => {
     Promise.all([
-      productApi.getActive(),
+      productApi.getAll(),
       brandApi.getActive(),
       categoryApi.getRoot(),
     ]).then(([p, b, c]) => {

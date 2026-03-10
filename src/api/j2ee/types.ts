@@ -158,6 +158,8 @@ export interface ProductSpecification {
 }
 
 // ─── Product ──────────────────────────────────────────────────────────────────
+export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'OUT_OF_STOCK';
+
 export interface Product {
   id: number;
   name: string;
@@ -169,6 +171,7 @@ export interface Product {
   media: ProductMedia[];
   specifications: ProductSpecification[];
   isActive: boolean;
+  status?: ProductStatus;
   createdAt: string;
   updatedAt: string;
 }

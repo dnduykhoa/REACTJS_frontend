@@ -61,7 +61,7 @@ export default function ProductsPage() {
     } else if (brandId) {
       req = productApi.getByBrand(brandId);
     } else {
-      req = productApi.getActive();
+      req = productApi.getAll();
     }
 
     req.then((res) => setProducts(res.data.data)).finally(() => setLoading(false));

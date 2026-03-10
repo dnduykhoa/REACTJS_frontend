@@ -99,6 +99,18 @@ export const productApi = {
 
   toggleActive: (id: number) =>
     apiClient.patch<ApiResponse<Product>>(`/api/products/${id}/toggle-active`),
+
+  outOfStock: (id: number) =>
+    apiClient.patch<ApiResponse<Product>>(`/api/products/${id}/out-of-stock`),
+
+  restore: (id: number) =>
+    apiClient.patch<ApiResponse<Product>>(`/api/products/${id}/restore`),
+
+  getInactive: () =>
+    apiClient.get<ApiResponse<Product[]>>('/api/products/inactive'),
+
+  getOutOfStock: () =>
+    apiClient.get<ApiResponse<Product[]>>('/api/products/out-of-stock'),
 };
 
 // ─── Product Media ────────────────────────────────────────────────────────────
