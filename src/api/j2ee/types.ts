@@ -6,7 +6,7 @@ export interface ApiResponse<T = unknown> {
 
 // ─── Auth / User ─────────────────────────────────────────────────────────────
 export interface LoginRequest {
-  usernameOrEmail: string;
+  emailOrPhone: string;
   password: string;
 }
 
