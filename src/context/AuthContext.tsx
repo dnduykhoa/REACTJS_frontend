@@ -6,11 +6,13 @@ interface AuthContextType {
   login: (userData: LoginResponse, rememberMe?: boolean) => void;
   logout: () => void;
   isAdmin: boolean;
+  getToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const STORAGE_KEY = 'j2ee_user';
+const TOKEN_KEY = 'j2ee_token';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<LoginResponse | null>(() => {
@@ -22,21 +24,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  const getToken = (): string | null => {
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+  };
+
   const login = (userData: LoginResponse, rememberMe = false) => {
     setUser(userData);
+    const token = userData.token || '';
     if (rememberMe) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      localStorage.setItem(TOKEN_KEY, token);
       sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
     } else {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      sessionStorage.setItem(TOKEN_KEY, token);
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(TOKEN_KEY);
     }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
   };
 
   const isAdmin = user?.roles?.includes('ADMIN') ?? false;
@@ -44,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, login, logout, isAdmin, getToken }}>
       {children}
     </AuthContext.Provider>
   );

@@ -8,10 +8,12 @@ export interface ApiResponse<T = unknown> {
 export interface LoginRequest {
   emailOrPhone: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface LoginResponse {
   message: string;
+  token: string;
   userId: number;
   username: string;
   email: string;
@@ -44,8 +46,30 @@ export interface ChangePasswordRequest {
   confirmPassword: string;
 }
 
+export interface TwoFactorResponse {
+  message: string;
+  requiresTwoFactor: boolean;
+  emailOrPhone: string;
+}
+
+export interface Verify2FARequest {
+  emailOrPhone: string;
+  code: string;
+}
+
 export interface GoogleLoginRequest {
   idToken: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  resetToken: string;
+  newPassword: string;
+  confirmPassword: string;
 }
 
 export interface UserProfileResponse {
@@ -56,6 +80,7 @@ export interface UserProfileResponse {
   phone: string | null;
   birthDate: string | null;
   provider: string;
+  twoFactorEnabled: boolean;
   roles: string[];
 }
 
