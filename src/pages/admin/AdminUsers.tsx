@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { authApi } from '../../api/j2ee';
 import type { UserProfileResponse } from '../../api/j2ee/types';
 import { Users, Search, Shield, X, AlertCircle } from 'lucide-react';
+import Pagination from '../../components/Pagination';
+
+const PAGE_SIZE = 15;
 
 const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
 
@@ -15,9 +18,11 @@ export default function AdminUsers() {
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
+    setPage(1);
     authApi.getAllUsers().then((r) => setUsers(r.data.data)).finally(() => setLoading(false));
   };
 
@@ -27,6 +32,7 @@ export default function AdminUsers() {
     e.preventDefault();
     if (!search.trim()) { load(); return; }
     setLoading(true);
+    setPage(1);
     authApi.searchUsers(search).then((r) => setUsers(r.data.data)).finally(() => setLoading(false));
   };
 
@@ -152,9 +158,9 @@ export default function AdminUsers() {
                   <p className="text-slate-400 text-sm">Không có người dùng</p>
                 </td></tr>
               )}
-              {users.map((user, idx) => (
+              {users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((user, idx) => (
                 <tr key={user.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 text-slate-400 tabular-nums">{idx + 1}</td>
+                  <td className="px-4 py-3 text-slate-400 tabular-nums">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{user.username}</td>
                   <td className="px-4 py-3 text-slate-600">{user.fullName || '—'}</td>
                   <td className="px-4 py-3 text-slate-500">{user.email}</td>
@@ -180,6 +186,7 @@ export default function AdminUsers() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={Math.ceil(users.length / PAGE_SIZE)} total={users.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </div>
       )}
     </div>
