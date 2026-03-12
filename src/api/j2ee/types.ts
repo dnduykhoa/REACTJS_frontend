@@ -83,7 +83,33 @@ export interface UserProfileResponse {
   twoFactorEnabled: boolean;
   roles: string[];
 }
+// ─── Carousel ─────────────────────────────────────────────────────────────────
+export interface CarouselSlide {
+  id: number;
+  image: string;
+  mediaType: 'IMAGE' | 'VIDEO';
+  badge: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  buttonLink: string;
+  displayOrder: number;
+  intervalMs: number;
+  isActive: boolean;
+}
 
+export interface CarouselSlideRequest {
+  image?: string;
+  mediaType?: 'IMAGE' | 'VIDEO';
+  badge?: string;
+  title?: string;
+  subtitle?: string;
+  buttonText?: string;
+  buttonLink?: string;
+  displayOrder?: number;
+  intervalMs?: number;
+  isActive?: boolean;
+}
 // ─── Brand ───────────────────────────────────────────────────────────────────
 export interface Brand {
   id: number;
