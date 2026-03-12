@@ -22,6 +22,21 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Interceptor: khi nhận 401 (token hết hạn / không hợp lệ) → xóa auth và về trang login
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem('j2ee_user');
+      localStorage.removeItem('j2ee_token');
+      sessionStorage.removeItem('j2ee_user');
+      sessionStorage.removeItem('j2ee_token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const cartClient = axios.create({
   baseURL: BASE_URL,
   headers: {

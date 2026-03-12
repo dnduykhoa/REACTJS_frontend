@@ -15,17 +15,17 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       productApi.getAll(),
       brandApi.getAll(),
       categoryApi.getAll(),
       authApi.getAllUsers(),
     ]).then(([p, b, c, u]) => {
       setStats({
-        products: p.data.data.length,
-        brands: b.data.data.length,
-        categories: c.data.data.length,
-        users: u.data.data.length,
+        products: p.status === 'fulfilled' ? (p.value.data.data?.length ?? 0) : 0,
+        brands:   b.status === 'fulfilled' ? (b.value.data.data?.length ?? 0) : 0,
+        categories: c.status === 'fulfilled' ? (c.value.data.data?.length ?? 0) : 0,
+        users:    u.status === 'fulfilled' ? (u.value.data.data?.length ?? 0) : 0,
       });
     }).finally(() => setLoading(false));
   }, []);
