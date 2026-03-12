@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { productApi } from '../../api/j2ee';
 import type { Product, ProductStatus } from '../../api/j2ee/types';
 import { Package, Plus, Search, Pencil, Trash2, RotateCcw, PackageX } from 'lucide-react';
+import Pagination from '../../components/Pagination';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
+const PAGE_SIZE = 15;
 
 type StatusTab = 'all' | 'active' | 'inactive' | 'out_of_stock';
 
@@ -48,9 +50,11 @@ export default function AdminProducts() {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<StatusTab>('all');
   const [actionId, setActionId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
   const loadProducts = (t: StatusTab) => {
     setLoading(true);
+    setPage(1);
     const req =
       t === 'active' ? productApi.getActive() :
       t === 'inactive' ? productApi.getInactive() :
@@ -70,6 +74,7 @@ export default function AdminProducts() {
     e.preventDefault();
     if (!search.trim()) { loadProducts(tab); return; }
     setLoading(true);
+    setPage(1);
     productApi.search(search).then((r) => setProducts(r.data.data)).finally(() => setLoading(false));
   };
 
@@ -187,13 +192,13 @@ export default function AdminProducts() {
                   </td>
                 </tr>
               )}
-              {products.map((p, idx) => {
+              {products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((p, idx) => {
                 const img = getPrimaryImage(p);
                 const status = getProductStatus(p);
                 const busy = actionId === p.id;
                 return (
                   <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-slate-400 tabular-nums">{idx + 1}</td>
+                    <td className="px-4 py-3 text-slate-400 tabular-nums">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                     <td className="px-4 py-3">
                       {img ? (
                         <img src={img} alt="" className="w-10 h-10 object-cover rounded-xl" />
@@ -267,6 +272,7 @@ export default function AdminProducts() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={Math.ceil(products.length / PAGE_SIZE)} total={products.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </div>
       )}
     </div>

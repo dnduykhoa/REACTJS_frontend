@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { attributeDefinitionApi, attributeGroupApi } from '../../api/j2ee';
 import type { AttributeDefinition, AttributeDefinitionRequest, AttributeGroup, DataType } from '../../api/j2ee/types';
 import { Sliders, Plus, Pencil, Trash2, AlertCircle, X, CheckCircle, XCircle } from 'lucide-react';
+import Pagination from '../../components/Pagination';
+
+const PAGE_SIZE = 15;
 
 const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
@@ -29,9 +32,11 @@ export default function AdminAttributeDefinitions() {
   const [form, setForm] = useState<AttributeDefinitionRequest>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
 
   const load = () => {
     setLoading(true);
+    setPage(1);
     Promise.all([attributeDefinitionApi.getAll(), attributeGroupApi.getAll()]).then(([d, g]) => {
       setDefs(d.data.data);
       setGroups(g.data.data);
@@ -192,9 +197,9 @@ export default function AdminAttributeDefinitions() {
                   <p className="text-slate-400 text-sm">Chưa có thuộc tính nào</p>
                 </td></tr>
               )}
-              {defs.map((d, idx) => (
+              {defs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((d, idx) => (
                 <tr key={d.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 text-slate-400 tabular-nums">{idx + 1}</td>
+                  <td className="px-4 py-3 text-slate-400 tabular-nums">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{d.name}</td>
                   <td className="px-4 py-3 text-slate-500 font-mono text-xs">{d.attrKey}</td>
                   <td className="px-4 py-3">
@@ -221,6 +226,7 @@ export default function AdminAttributeDefinitions() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={Math.ceil(defs.length / PAGE_SIZE)} total={defs.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </div>
       )}
     </div>

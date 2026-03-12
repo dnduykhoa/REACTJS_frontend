@@ -80,7 +80,9 @@ export default function ProductDetailPage() {
     grouped[group].push({ key, value });
   }
 
-  const inStock = product.stockQuantity > 0;
+  const isDiscontinued = product.status === 'INACTIVE' || (!product.isActive && product.status !== 'OUT_OF_STOCK');
+  const inStock = !isDiscontinued && product.stockQuantity > 0;
+  const canAddToCart = inStock && !isDiscontinued;
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -171,10 +173,17 @@ export default function ProductDetailPage() {
 
           {/* Stock & category */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className={`flex items-center gap-1.5 text-sm font-medium ${inStock ? 'text-emerald-600' : 'text-rose-500'}`}>
-              {inStock ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-              {inStock ? `Còn hàng (${product.stockQuantity})` : 'Hết hàng'}
-            </div>
+            {isDiscontinued ? (
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
+                <XCircle className="w-4 h-4" />
+                Ngưng bán
+              </div>
+            ) : (
+              <div className={`flex items-center gap-1.5 text-sm font-medium ${inStock ? 'text-emerald-600' : 'text-rose-500'}`}>
+                {inStock ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                {inStock ? `Còn hàng (${product.stockQuantity})` : 'Hết hàng'}
+              </div>
+            )}
             {product.category && (
               <Link
                 to={`/products?categoryId=${product.category.id}`}
@@ -193,7 +202,7 @@ export default function ProductDetailPage() {
 
           <div className="mt-auto pt-4 space-y-3">
             {/* Quantity selector */}
-            {inStock && (
+            {canAddToCart && (
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-slate-600">Số lượng:</span>
                 <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
@@ -233,11 +242,11 @@ export default function ProductDetailPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleAddToCart}
-                disabled={!inStock || addingToCart}
+                disabled={!canAddToCart || addingToCart}
                 className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 <ShoppingCart className="w-4 h-4" />
-                {addingToCart ? 'Đang thêm...' : inStock ? 'Thêm vào giỏ hàng' : 'Hết hàng'}
+                {addingToCart ? 'Đang thêm...' : isDiscontinued ? 'Ngưng bán' : canAddToCart ? 'Thêm vào giỏ hàng' : 'Hết hàng'}
               </button>
             </div>
           </div>
