@@ -106,6 +106,16 @@ export default function AdminProductForm() {
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const handleStockQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const qty = Number(e.target.value);
+    setForm((prev) => ({
+      ...prev,
+      stockQuantity: e.target.value,
+      // Tự động kích hoạt lại sản phẩm khi có hàng trong kho
+      isActive: qty > 0 ? true : prev.isActive,
+    }));
+  };
+
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, categoryId: e.target.value }));
     const catId = Number(e.target.value);
@@ -273,7 +283,7 @@ export default function AdminProductForm() {
             </div>
             <div>
               <label className={labelClass}>Số lượng kho <span className="text-rose-500">*</span></label>
-              <input type="number" required min={0} value={form.stockQuantity} onChange={set('stockQuantity')} className={inputClass} />
+              <input type="number" required min={0} value={form.stockQuantity} onChange={handleStockQuantityChange} className={inputClass} />
             </div>
           </div>
 
