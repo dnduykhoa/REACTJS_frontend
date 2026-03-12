@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { productApi, brandApi, categoryApi } from '../api/j2ee';
-import type { Product, Brand, Category } from '../api/j2ee/types';
+import { productApi, brandApi, categoryApi, carouselApi } from '../api/j2ee';
+import type { Product, Brand, Category, CarouselSlide } from '../api/j2ee/types';
 import ProductCard from '../components/ProductCard';
-import { ArrowRight, Zap, Shield, Truck } from 'lucide-react';
+import { ArrowRight, Zap, Shield, Truck, ChevronLeft, ChevronRight } from 'lucide-react';
+
 
 function Spinner() {
   return (
@@ -17,17 +18,71 @@ export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [slides, setSlides] = useState<CarouselSlide[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const bgVideoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+
+  const startTimer = useCallback((slideList: CarouselSlide[], idx: number) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (slideList.length <= 1) return;
+    const interval = slideList[idx]?.intervalMs ?? 4000;
+    timerRef.current = setTimeout(() => {
+      const next = (idx + 1) % slideList.length;
+      setCurrentSlide(next);
+      startTimer(slideList, next);
+    }, interval);
+  }, []);
+
+  // Khởi động timer khi slides thay đổi
+  const slidesRef = useRef<CarouselSlide[]>([]);
+  slidesRef.current = slides;
+
+  useEffect(() => {
+    if (slides.length > 0) {
+      startTimer(slides, 0);
+    }
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [slides, startTimer]);
+
+  // Khi currentSlide thay đổi → play video đang active, pause video khác
+  useEffect(() => {
+    slides.forEach((slide, idx) => {
+      const vid = videoRefs.current[idx];
+      if (!vid) return;
+      if (idx === currentSlide && slide.mediaType === 'VIDEO') {
+        vid.currentTime = 0;
+        vid.play().catch(() => {});
+        const bgVid = bgVideoRefs.current[idx];
+        if (bgVid) { bgVid.currentTime = 0; bgVid.play().catch(() => {}); }
+      } else {
+        vid.pause();
+        vid.currentTime = 0;
+        const bgVid = bgVideoRefs.current[idx];
+        if (bgVid) { bgVid.pause(); bgVid.currentTime = 0; }
+      }
+    });
+  }, [currentSlide, slides]);
+
+  const goToSlide = (idx: number) => {
+    setCurrentSlide(idx);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    startTimer(slidesRef.current, idx);
+  };
 
   useEffect(() => {
     Promise.all([
       productApi.getAll(),
       brandApi.getActive(),
       categoryApi.getRoot(),
-    ]).then(([p, b, c]) => {
+      carouselApi.getActive(),
+    ]).then(([p, b, c, carousel]) => {
       setProducts(p.data.data.slice(0, 8));
       setBrands(b.data.data);
       setCategories(c.data.data);
+      setSlides(carousel.data.data || []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -35,33 +90,130 @@ export default function HomePage() {
 
   return (
     <div>
-      {/* ── Hero ── */}
-      <section className="relative overflow-hidden">
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url('/image.png')" }}
-        />
-        {/* Overlay để text dễ đọc */}
-        <div className="absolute inset-0 bg-indigo-950/55" />
-
-        <div className="relative max-w-7xl mx-auto px-4 py-24 text-center">
-          <span className="inline-block bg-white/10 text-white text-xs font-semibold px-3 py-1.5 rounded-full mb-5 tracking-wide uppercase">
-            Công nghệ hàng đầu
-          </span>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight">
-            Thiết bị công nghệ<br className="hidden md:block" /> chính hãng, giá tốt
-          </h1>
-          <p className="text-indigo-100 text-lg mb-8 max-w-xl mx-auto">
-            Laptop, điện thoại và phụ kiện từ các thương hiệu uy tín — giao hàng nhanh toàn quốc.
-          </p>
-          <Link
-            to="/products"
-            className="inline-flex items-center gap-2 bg-white text-indigo-700 font-semibold px-8 py-3.5 rounded-full hover:bg-indigo-50 transition-colors shadow-lg"
+      {/* ── Hero Carousel ── */}
+      <section
+        className="relative overflow-hidden h-[400px] md:h-[500px]"
+        onMouseEnter={() => { if (timerRef.current) clearTimeout(timerRef.current); }}
+        onMouseLeave={() => startTimer(slidesRef.current, currentSlide)}
+      >
+        {/* Slides */}
+        {slides.map((slide, idx) => (
+          <div
+            key={slide.id}
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+              idx === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
           >
-            Mua ngay <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
+            {slide.mediaType === 'VIDEO' ? (
+              <>
+                {/* Layer 1: nền mờ */}
+                <video
+                  ref={el => { bgVideoRefs.current[idx] = el; }}
+                  className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-60"
+                  src={slide.image}
+                  muted
+                  loop
+                  playsInline
+                  aria-hidden
+                />
+                {/* Layer 2: video thật object-contain */}
+                <video
+                  ref={el => { videoRefs.current[idx] = el; }}
+                  key={slide.image}
+                  className="absolute inset-0 w-full h-full object-contain"
+                  src={slide.image}
+                  muted
+                  loop
+                  playsInline
+                />
+              </>
+            ) : (
+              <>
+                {/* Layer 1: nền mờ */}
+                <div
+                  className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-110 blur-2xl opacity-60"
+                  style={{ backgroundImage: `url('${slide.image}')` }}
+                />
+                {/* Layer 2: ảnh thật object-contain */}
+                <div
+                  className="absolute inset-0 bg-contain bg-center bg-no-repeat"
+                  style={{ backgroundImage: `url('${slide.image}')` }}
+                />
+              </>
+            )}
+            {/* Chỉ hiện overlay + text khi slide có nội dung */}
+            {(slide.title || slide.badge || slide.subtitle || slide.buttonText) && (
+              <>
+                <div className="absolute inset-0 bg-indigo-950/55" />
+                <div className="relative h-full flex items-center justify-center">
+                  <div className="max-w-7xl w-full mx-auto px-4 text-center">
+                    {slide.badge && (
+                      <span className="inline-block bg-white/10 text-white text-xs font-semibold px-3 py-1.5 rounded-full mb-5 tracking-wide uppercase">
+                        {slide.badge}
+                      </span>
+                    )}
+                    {slide.title && (
+                      <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight">
+                        {slide.title.split('\n').map((line, i, arr) => (
+                          <span key={i}>{line}{i < arr.length - 1 && <br className="hidden md:block" />}</span>
+                        ))}
+                      </h1>
+                    )}
+                    {slide.subtitle && (
+                      <p className="text-indigo-100 text-lg mb-8 max-w-xl mx-auto">
+                        {slide.subtitle}
+                      </p>
+                    )}
+                    {slide.buttonText && (
+                      <Link
+                        to={slide.buttonLink}
+                        className="inline-flex items-center gap-2 bg-white text-indigo-700 font-semibold px-8 py-3.5 rounded-full hover:bg-indigo-50 transition-colors shadow-lg"
+                      >
+                        {slide.buttonText} <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+
+        {/* Prev / Next arrows */}
+        {slides.length > 1 && (
+          <>
+            <button
+              onClick={() => goToSlide((currentSlide - 1 + slides.length) % slides.length)}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center backdrop-blur-sm transition-colors"
+              aria-label="Slide trước"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => goToSlide((currentSlide + 1) % slides.length)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center backdrop-blur-sm transition-colors"
+              aria-label="Slide tiếp theo"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </>
+        )}
+
+        {/* Indicator dots */}
+        {slides.length > 1 && (
+          <div className="absolute bottom-5 left-0 right-0 flex justify-center gap-2 z-10">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => goToSlide(idx)}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  idx === currentSlide ? 'bg-white w-6' : 'bg-white/50 w-2 hover:bg-white/80'
+                }`}
+                aria-label={`Slide ${idx + 1}`}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Trust badges ── */}

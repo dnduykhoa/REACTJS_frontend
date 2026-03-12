@@ -12,6 +12,7 @@ import {
   Users,
   LogOut,
   Monitor,
+  Image,
 } from 'lucide-react';
 
 const navLinks = [
@@ -23,6 +24,7 @@ const navLinks = [
   { to: '/admin/attribute-definitions', label: 'Thuộc tính', icon: Sliders },
   { to: '/admin/category-attributes', label: 'Thuộc tính DM', icon: Link2 },
   { to: '/admin/users', label: 'Người dùng', icon: Users },
+  { to: '/admin/carousel', label: 'Carousel', icon: Image },
 ];
 
 export default function AdminLayout() {
