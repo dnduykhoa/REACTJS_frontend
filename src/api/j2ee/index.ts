@@ -9,3 +9,4 @@ export { categoryAttributeApi } from './categoryAttributeApi';
 export { productApi, productMediaApi, productSpecApi } from './productApi';
 export { cartApi } from './cartApi';
 export { carouselApi } from './carouselApi';
+export { orderApi } from './orderApi';

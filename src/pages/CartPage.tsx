@@ -225,7 +225,7 @@ export default function CartPage() {
                     {/* Subtotal + remove */}
                     <div className="flex items-center gap-3">
                       <p className={`text-base font-bold ${
-                        isUnavailable(item) ? 'text-slate-400 line-through' : 'text-indigo-600'
+                        isUnavailable(item) ? 'text-slate-400 line-through' : 'text-black'
                       }`}>
                         {Number(item.subtotal).toLocaleString('vi-VN')}₫
                       </p>
@@ -270,7 +270,7 @@ export default function CartPage() {
             <div className="border-t border-slate-100 pt-3 mb-4">
               <div className="flex justify-between font-bold text-slate-800">
                 <span>Tổng cộng</span>
-                <span className="text-indigo-600 text-lg">{Number(checkoutAmount).toLocaleString('vi-VN')}₫</span>
+                <span className="text-[#e60012] text-lg">{Number(checkoutAmount).toLocaleString('vi-VN')}₫</span>
               </div>
               {hasUnavailable && (
                 <p className="text-xs text-slate-400 mt-1">(Không bao gồm sản phẩm không thể mua)</p>

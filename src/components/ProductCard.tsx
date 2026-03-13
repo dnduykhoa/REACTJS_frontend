@@ -92,7 +92,7 @@ export default function ProductCard({ product }: { product: Product }) {
           </h3>
         </Link>
         <div className="flex items-center justify-between mt-2">
-          <p className={`text-base font-bold ${unavailable ? 'text-slate-400' : 'text-indigo-600'}`}>
+          <p className={`text-base font-bold ${unavailable ? 'text-slate-400' : 'text-[#e60012]'}`}>
             {Number(product.price).toLocaleString('vi-VN')}₫
           </p>
           {!unavailable && product.stockQuantity > 0 && product.stockQuantity <= 5 && (

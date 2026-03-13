@@ -15,6 +15,8 @@ import ChangePasswordPage from './pages/ChangePasswordPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
+import OrdersPage from './pages/OrdersPage';
+import OrderDetailPage from './pages/OrderDetailPage';
 
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -46,6 +48,8 @@ export default function App() {
             <Route path="/profile/:id/change-password" element={<ChangePasswordPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/:id" element={<OrderDetailPage />} />
           </Route>
 
           {/* Admin routes */}
