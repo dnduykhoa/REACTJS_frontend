@@ -1,10 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';import { useCart } from '../context/CartContext';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { orderApi } from '../api/j2ee';
+import type { PaymentMethod } from '../api/j2ee/types';
+import OrderSuccessScreen from '../components/OrderSuccessScreen';
 import {
   ShoppingCart, MapPin, User, Phone, Mail, FileText,
   ArrowLeft, CreditCard, Banknote, Smartphone, ChevronRight,
-  LocateFixed, AlertCircle, CheckCircle2, Package,
+  LocateFixed, AlertCircle, CheckCircle2, Package, XCircle,
 } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
@@ -19,8 +23,6 @@ interface Ward { code?: number; id?: number; name: string; }
 const getId = (obj: { code?: number; id?: number }) => obj.code ?? obj.id ?? 0;
 
 // ─── Payment method ───────────────────────────────────────────────────────────
-type PaymentMethod = 'CASH' | 'VNPAY' | 'MOMO';
-
 const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: React.ReactNode; desc: string; color: string }[] = [
   {
     key: 'CASH',
@@ -52,9 +54,21 @@ function resolveUrl(url: string) {
   return `${BASE_URL}/${url}`;
 }
 
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
+  return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+}
+
 export default function CheckoutPage() {
   const { user } = useAuth();
-  const { cart } = useCart();
+  const { cart, clearCart } = useCart();
+  const [searchParams] = useSearchParams();
+  const vnpayFailed = searchParams.get('vnpay') === 'failed';
+  const vnpayFailCode = searchParams.get('code');
+  const momoFailed = searchParams.get('momo') === 'failed';
+  const momoFailCode = searchParams.get('code');
 
   // ── Address selects ──────────────────────────────────────────────────────
   const [provinces, setProvinces] = useState<Province[]>([]);
@@ -67,7 +81,7 @@ export default function CheckoutPage() {
   // ── Form state ───────────────────────────────────────────────────────────
   const [form, setForm] = useState({
     fullName: user?.fullName || '',
-    phone: '',
+    phone: formatPhone(user?.phone || ''),
     email: user?.email || '',
     streetAddress: '',
     provinceCode: '',
@@ -80,6 +94,7 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [placedOrder, setPlacedOrder] = useState<import('../api/j2ee/types').OrderResponse | null>(null);
 
   // ── Load provinces on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -177,6 +192,11 @@ export default function CheckoutPage() {
     );
   };
 
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((p) => ({ ...p, phone: formatPhone(e.target.value) }));
+  };
+
   // ── Cart computed values ─────────────────────────────────────────────────
   const availableItems = cart?.items.filter(
     (item) => item.inStock && item.product.isActive !== false && item.product.status !== 'INACTIVE'
@@ -197,22 +217,33 @@ export default function CheckoutPage() {
         form.provinceName,
       ].filter(Boolean).join(', ');
 
-      // Simulate order submission — replace with actual API call when backend is ready
-      await new Promise((res) => setTimeout(res, 800));
-
-      console.log('Order submitted:', {
-        userId: user?.userId,
+      const res = await orderApi.createOrder({
         fullName: form.fullName,
         phone: form.phone,
-        email: form.email,
+        email: form.email || undefined,
         shippingAddress,
-        note: form.note,
+        note: form.note || undefined,
         paymentMethod,
         items: availableItems.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
-        totalAmount,
       });
 
+      const order = res.data.data;
+
+      // Nếu VNPAY → redirect trình duyệt sang cổng thanh toán
+      if (paymentMethod === 'VNPAY' && order.vnpayUrl) {
+        window.location.href = order.vnpayUrl;
+        return;
+      }
+
+      // Nếu MoMo → redirect trình duyệt sang cổng thanh toán MoMo
+      if (paymentMethod === 'MOMO' && order.momoUrl) {
+        window.location.href = order.momoUrl;
+        return;
+      }
+
+      setPlacedOrder(order);
       setSuccess(true);
+      await clearCart();
     } catch {
       setSubmitError('Đặt hàng thất bại. Vui lòng thử lại.');
     } finally {
@@ -233,6 +264,78 @@ export default function CheckoutPage() {
     );
   }
 
+  // ── VNPAY payment failure screen ──────────────────────────────────────────
+  if (vnpayFailed) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-10 h-10 text-rose-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-1">Thanh toán không thành công</h2>
+          <p className="text-slate-500 text-sm">
+            {vnpayFailCode === '24'
+              ? 'Bạn đã huỷ giao dịch.'
+              : vnpayFailCode === '11'
+              ? 'Giao dịch đã hết hạn.'
+              : `Thanh toán thất bại (mã lỗi: ${vnpayFailCode ?? 'unknown'}).`}{' '}
+            Đơn hàng đã bị huỷ tự động.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link
+            to="/cart"
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm"
+          >
+            Quay lại giỏ hàng
+          </Link>
+          <Link
+            to="/products"
+            className="flex-1 inline-flex items-center justify-center gap-2 border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-colors text-sm"
+          >
+            Tiếp tục mua sắm
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MoMo payment failure screen ────────────────────────────────────────────
+  if (momoFailed) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-10 h-10 text-rose-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-1">Thanh toán không thành công</h2>
+          <p className="text-slate-500 text-sm">
+            {momoFailCode === '1006'
+              ? 'Bạn đã huỷ giao dịch.'
+              : momoFailCode === '1005'
+              ? 'Url thanh toán đã hết hạn.'
+              : `Thanh toán thất bại (mã lỗi: ${momoFailCode ?? 'unknown'}).`}{' '}
+            Đơn hàng đã bị huỷ tự động.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link
+            to="/cart"
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm"
+          >
+            Quay lại giỏ hàng
+          </Link>
+          <Link
+            to="/products"
+            className="flex-1 inline-flex items-center justify-center gap-2 border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-colors text-sm"
+          >
+            Tiếp tục mua sắm
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!cart || availableItems.length === 0) {
     return (
       <div className="text-center py-24">
@@ -245,26 +348,8 @@ export default function CheckoutPage() {
     );
   }
 
-  if (success) {
-    return (
-      <div className="max-w-lg mx-auto px-4 py-20 text-center">
-        <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
-          <CheckCircle2 className="w-10 h-10 text-emerald-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Đặt hàng thành công!</h2>
-        <p className="text-slate-500 text-sm mb-8">
-          Cảm ơn bạn đã đặt hàng. Chúng tôi sẽ liên hệ xác nhận sớm nhất.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link to="/" className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm">
-            Về trang chủ
-          </Link>
-          <Link to="/products" className="inline-flex items-center justify-center gap-2 border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-colors text-sm">
-            Tiếp tục mua sắm
-          </Link>
-        </div>
-      </div>
-    );
+  if (success && placedOrder) {
+    return <OrderSuccessScreen order={placedOrder} />;
   }
 
   return (
@@ -324,9 +409,9 @@ export default function CheckoutPage() {
                       type="tel"
                       required
                       value={form.phone}
-                      onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                      onChange={handlePhoneChange}
                       placeholder="0912 345 678"
-                      pattern="[0-9\s\+\-]{9,15}"
+                      pattern="[0-9 ]{11,13}"
                       title="Nhập số điện thoại hợp lệ"
                       className={`${inputClass} pl-10`}
                     />
@@ -346,7 +431,7 @@ export default function CheckoutPage() {
                     className={`${inputClass} pl-10`}
                   />
                 </div>
-                <p className="text-xs text-slate-400 mt-1">Dùng để nhận xác nhận đơn hàng (không bắt buộc)</p>
+                <p className="text-xs text-slate-400 mt-1">Dùng để nhận xác nhận đơn hàng</p>
               </div>
             </div>
 

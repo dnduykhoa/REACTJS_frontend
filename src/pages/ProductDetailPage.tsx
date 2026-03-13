@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { productApi } from '../api/j2ee';
 import type { Product, ProductMedia } from '../api/j2ee/types';
-import { Package, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { Package, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
@@ -106,6 +106,26 @@ export default function ProductDetailPage() {
     }
   };
 
+  const handleBuyNow = async () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      setAddingToCart(true);
+      await addToCart(product.id, qty);
+      navigate('/checkout');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Không thể thêm vào giỏ hàng';
+      setCartMsg({ type: 'error', text: msg });
+      setTimeout(() => setCartMsg(null), 3000);
+    } finally {
+      setAddingToCart(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Breadcrumb */}
@@ -166,7 +186,7 @@ export default function ProductDetailPage() {
           <h1 className="text-2xl font-extrabold text-slate-800 leading-snug">{product.name}</h1>
 
           <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-extrabold text-indigo-600">
+            <p className="text-3xl font-extrabold text-[#e60012]">
               {Number(product.price).toLocaleString('vi-VN')}₫
             </p>
           </div>
@@ -247,6 +267,14 @@ export default function ProductDetailPage() {
               >
                 <ShoppingCart className="w-4 h-4" />
                 {addingToCart ? 'Đang thêm...' : isDiscontinued ? 'Ngưng bán' : canAddToCart ? 'Thêm vào giỏ hàng' : 'Hết hàng'}
+              </button>
+              <button
+                onClick={handleBuyNow}
+                disabled={!canAddToCart || addingToCart}
+                className="flex-1 flex items-center justify-center gap-2 bg-[#e60012] text-white py-3.5 rounded-xl font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                <Zap className="w-4 h-4" />
+                Mua ngay
               </button>
             </div>
           </div>

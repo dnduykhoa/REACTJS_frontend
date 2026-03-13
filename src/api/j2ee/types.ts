@@ -227,6 +227,57 @@ export interface Product {
   updatedAt: string;
 }
 
+// ─── Order ───────────────────────────────────────────────────────────────────
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'DELIVERED' | 'CANCELLED';
+
+export type PaymentMethod = 'CASH' | 'VNPAY' | 'MOMO';
+
+export interface OrderItemRequest {
+  productId: number;
+  quantity: number;
+}
+
+export interface OrderRequest {
+  fullName: string;
+  phone: string;
+  email?: string;
+  shippingAddress: string;
+  note?: string;
+  paymentMethod: PaymentMethod;
+  items: OrderItemRequest[];
+}
+
+export interface OrderItemResponse {
+  id: number;
+  productId: number;
+  productName: string;
+  productImageUrl: string | null;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface OrderResponse {
+  id: number;
+  orderCode: string;
+  userId: number;
+  fullName: string;
+  phone: string;
+  email: string | null;
+  shippingAddress: string;
+  note: string | null;
+  paymentMethod: PaymentMethod;
+  status: OrderStatus;
+  totalAmount: number;
+  items: OrderItemResponse[];
+  createdAt: string;
+  updatedAt: string;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+  vnpayUrl?: string | null;
+  momoUrl?: string | null;
+}
+
 // ─── Cart ─────────────────────────────────────────────────────────────────────
 export interface CartItemRequest {
   productId: number;
