@@ -1,9 +1,19 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { orderApi } from '../api/j2ee';
-import type { PaymentMethod } from '../api/j2ee/types';
+import type { PaymentMethod, ProductMedia } from '../api/j2ee/types';
+
+// ─── Buy Now state (truyền từ ProductDetailPage, không dùng giỏ hàng) ─────────
+interface BuyNowState {
+  productId: number;
+  variantId?: number;
+  qty: number;
+  productName: string;
+  unitPrice: number;
+  media?: ProductMedia[];
+}
 import OrderSuccessScreen from '../components/OrderSuccessScreen';
 import {
   ShoppingCart, MapPin, User, Phone, Mail, FileText,
@@ -65,6 +75,13 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const { cart, clearCart } = useCart();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const buyNow = (location.state as { buyNow?: BuyNowState } | null)?.buyNow;
+  const isBuyNow = !!buyNow;
+  const navigate = useNavigate();
+  // Khi Mua ngay → quay về trang sản phẩm; khi từ giỏ hàng → quay về /cart
+  const backTarget = isBuyNow ? `/products/${buyNow!.productId}` : '/cart';
+  const backLabel = isBuyNow ? 'Sản phẩm' : 'Giỏ hàng';
   const vnpayFailed = searchParams.get('vnpay') === 'failed';
   const vnpayFailCode = searchParams.get('code');
   const momoFailed = searchParams.get('momo') === 'failed';
@@ -201,7 +218,10 @@ export default function CheckoutPage() {
   const availableItems = cart?.items.filter(
     (item) => item.inStock && item.product.isActive !== false && item.product.status !== 'INACTIVE'
   ) ?? [];
-  const totalAmount = availableItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const totalAmount = isBuyNow
+    ? (buyNow!.unitPrice * buyNow!.qty)
+    : availableItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const itemCount = isBuyNow ? 1 : availableItems.length;
 
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent) => {
@@ -217,6 +237,14 @@ export default function CheckoutPage() {
         form.provinceName,
       ].filter(Boolean).join(', ');
 
+      const orderItems = isBuyNow
+        ? [{ productId: buyNow!.productId, variantId: buyNow!.variantId, quantity: buyNow!.qty }]
+        : availableItems.map((i) => ({
+            productId: i.product.id,
+            variantId: i.variantId ?? undefined,
+            quantity: i.quantity,
+          }));
+
       const res = await orderApi.createOrder({
         fullName: form.fullName,
         phone: form.phone,
@@ -224,11 +252,7 @@ export default function CheckoutPage() {
         shippingAddress,
         note: form.note || undefined,
         paymentMethod,
-        items: availableItems.map((i) => ({
-          productId: i.product.id,
-          variantId: i.variantId ?? undefined,
-          quantity: i.quantity,
-        })),
+        items: orderItems,
       });
 
       const order = res.data.data;
@@ -247,7 +271,8 @@ export default function CheckoutPage() {
 
       setPlacedOrder(order);
       setSuccess(true);
-      await clearCart();
+      // Chỉ xóa giỏ hàng khi checkout từ giỏ, không xóa khi Mua ngay
+      if (!isBuyNow) await clearCart();
     } catch {
       setSubmitError('Đặt hàng thất bại. Vui lòng thử lại.');
     } finally {
@@ -340,7 +365,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!cart || availableItems.length === 0) {
+  if (!isBuyNow && (!cart || availableItems.length === 0)) {
     return (
       <div className="text-center py-24">
         <ShoppingCart className="w-16 h-16 text-slate-200 mx-auto mb-4" />
@@ -360,13 +385,23 @@ export default function CheckoutPage() {
     <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link to="/cart" className="p-2 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
+        <button
+          type="button"
+          onClick={() => navigate(backTarget)}
+          className="p-2 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+        >
           <ArrowLeft size={18} />
-        </Link>
+        </button>
         <div>
           <h1 className="text-2xl font-extrabold text-slate-800">Thanh toán</h1>
           <div className="flex items-center gap-1.5 text-sm text-slate-400 mt-0.5">
-            <Link to="/cart" className="hover:text-indigo-600 transition-colors">Giỏ hàng</Link>
+            <button
+              type="button"
+              onClick={() => navigate(backTarget)}
+              className="hover:text-indigo-600 transition-colors"
+            >
+              {backLabel}
+            </button>
             <ChevronRight className="w-3.5 h-3.5" />
             <span className="text-slate-700 font-medium">Thanh toán</span>
           </div>
@@ -572,33 +607,62 @@ export default function CheckoutPage() {
           {/* ─── Right: Order summary ────────────────────────────────── */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sticky top-24 space-y-4">
-              <h2 className="font-bold text-slate-800">Đơn hàng ({availableItems.length} sản phẩm)</h2>
+              <h2 className="font-bold text-slate-800">Đơn hàng ({itemCount} sản phẩm)</h2>
 
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {availableItems.map((item) => {
-                  const imgMedia =
-                    item.product.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
-                    item.product.media?.find((m) => m.mediaType === 'IMAGE');
-                  const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
-                  return (
-                    <div key={item.id} className="flex gap-3 items-start">
-                      <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
-                        {imgUrl ? (
-                          <img src={imgUrl} alt={item.product.name} className="object-contain w-full h-full p-0.5" />
-                        ) : (
-                          <Package className="w-5 h-5 text-slate-200" />
-                        )}
+                {isBuyNow ? (
+                  // ── Buy Now: hiển thị 1 sản phẩm duy nhất ──────────────
+                  (() => {
+                    const imgMedia =
+                      buyNow!.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
+                      buyNow!.media?.find((m) => m.mediaType === 'IMAGE');
+                    const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+                    return (
+                      <div className="flex gap-3 items-start">
+                        <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
+                          {imgUrl ? (
+                            <img src={imgUrl} alt={buyNow!.productName} className="object-contain w-full h-full p-0.5" />
+                          ) : (
+                            <Package className="w-5 h-5 text-slate-200" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{buyNow!.productName}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">× {buyNow!.qty}</p>
+                        </div>
+                        <p className="text-xs font-bold text-indigo-600 shrink-0">
+                          {Number(buyNow!.unitPrice * buyNow!.qty).toLocaleString('vi-VN')}₫
+                        </p>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{item.product.name}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">× {item.quantity}</p>
+                    );
+                  })()
+                ) : (
+                  // ── Checkout từ giỏ hàng ────────────────────────────────
+                  availableItems.map((item) => {
+                    const imgMedia =
+                      item.product.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
+                      item.product.media?.find((m) => m.mediaType === 'IMAGE');
+                    const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+                    return (
+                      <div key={item.id} className="flex gap-3 items-start">
+                        <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
+                          {imgUrl ? (
+                            <img src={imgUrl} alt={item.product.name} className="object-contain w-full h-full p-0.5" />
+                          ) : (
+                            <Package className="w-5 h-5 text-slate-200" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{item.product.name}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">× {item.quantity}</p>
+                        </div>
+                        <p className="text-xs font-bold text-indigo-600 shrink-0">
+                          {Number(item.subtotal).toLocaleString('vi-VN')}₫
+                        </p>
                       </div>
-                      <p className="text-xs font-bold text-indigo-600 shrink-0">
-                        {Number(item.subtotal).toLocaleString('vi-VN')}₫
-                      </p>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
 
               <div className="border-t border-slate-100 pt-3 space-y-2 text-sm">
@@ -612,7 +676,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between font-bold text-slate-800 pt-2 border-t border-slate-100">
                   <span>Tổng cộng</span>
-                  <span className="text-indigo-600 text-base">{Number(totalAmount).toLocaleString('vi-VN')}₫</span>
+                  <span className="text-[#e60012] text-base">{Number(totalAmount).toLocaleString('vi-VN')}₫</span>
                 </div>
               </div>
 

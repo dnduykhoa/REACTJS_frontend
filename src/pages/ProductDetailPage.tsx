@@ -313,28 +313,28 @@ export default function ProductDetailPage() {
     }
   };
 
-  const handleBuyNow = async () => {
+  const handleBuyNow = () => {
     if (!user) {
       navigate('/login');
       return;
     }
-    try {
-      setAddingToCart(true);
-      if (hasVariants && (!isSelectionComplete || !selectedVariant)) {
-        setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
-        return;
-      }
-      await addToCart(product.id, qty, selectedVariant?.id);
-      navigate('/checkout');
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Không thể thêm vào giỏ hàng';
-      setCartMsg({ type: 'error', text: msg });
-      setTimeout(() => setCartMsg(null), 3000);
-    } finally {
-      setAddingToCart(false);
+    if (hasVariants && (!isSelectionComplete || !selectedVariant)) {
+      setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+      return;
     }
+    // Không thêm vào giỏ hàng, truyền thẳng sang checkout qua router state
+    navigate('/checkout', {
+      state: {
+        buyNow: {
+          productId: product.id,
+          variantId: selectedVariant?.id,
+          qty,
+          productName: product.name,
+          unitPrice: currentPrice,
+          media: product.media,
+        },
+      },
+    });
   };
 
   return (

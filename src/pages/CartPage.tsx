@@ -228,7 +228,7 @@ export default function CartPage() {
                     {/* Subtotal + remove */}
                     <div className="flex items-center gap-3">
                       <p className={`text-base font-bold ${
-                        isUnavailable(item) ? 'text-slate-400 line-through' : 'text-black'
+                        isUnavailable(item) ? 'text-slate-400 line-through' : 'text-indigo-600'
                       }`}>
                         {Number(item.subtotal).toLocaleString('vi-VN')}₫
                       </p>
