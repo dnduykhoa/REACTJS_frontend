@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi } from '../../api/j2ee';
 import type { Product, Category, Brand, ProductMedia, ProductSpecification, CategoryAttribute } from '../../api/j2ee/types';
-import { ArrowLeft, AlertCircle, ImageIcon, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Trash2, Plus } from 'lucide-react';
 
 const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
@@ -273,7 +273,24 @@ export default function AdminProductForm() {
 
           <div>
             <label className={labelClass}>Mô tả</label>
-            <textarea rows={3} value={form.description} onChange={set('description')} className={inputClass} />
+            <textarea
+              rows={5}
+              value={form.description}
+              onChange={set('description')}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const target = e.currentTarget;
+                const start = target.selectionStart;
+                const end = target.selectionEnd;
+                const nextValue = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
+                setForm((prev) => ({ ...prev, description: nextValue }));
+                requestAnimationFrame(() => {
+                  target.selectionStart = target.selectionEnd = start + 1;
+                });
+              }}
+              className={inputClass}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -359,8 +376,8 @@ export default function AdminProductForm() {
                           className={inputClass}
                         />
                       ) : (
-                        <input
-                          type="text"
+                        <textarea
+                          rows={3}
                           value={val}
                           onChange={(e) => setVal(e.target.value)}
                           required={ca.isRequired}

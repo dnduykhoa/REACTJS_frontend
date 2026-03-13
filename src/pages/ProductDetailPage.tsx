@@ -215,7 +215,7 @@ export default function ProductDetailPage() {
           </div>
 
           {product.description && (
-            <p className="text-sm text-slate-500 leading-relaxed border-t border-slate-100 pt-4">
+            <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line border-t border-slate-100 pt-4">
               {product.description}
             </p>
           )}
@@ -295,7 +295,7 @@ export default function ProductDetailPage() {
                       {items.map((item, i) => (
                         <tr key={i} className={i % 2 === 0 ? 'bg-slate-50' : 'bg-white'}>
                           <td className="py-2.5 px-4 w-2/5 text-slate-500 font-medium">{item.key}</td>
-                          <td className="py-2.5 px-4 text-slate-800">{item.value}</td>
+                          <td className="py-2.5 px-4 text-slate-800 whitespace-pre-line">{item.value}</td>
                         </tr>
                       ))}
                     </tbody>
