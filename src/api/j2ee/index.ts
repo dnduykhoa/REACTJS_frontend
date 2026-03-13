@@ -6,7 +6,7 @@ export { categoryApi } from './categoryApi';
 export { attributeGroupApi } from './attributeGroupApi';
 export { attributeDefinitionApi } from './attributeDefinitionApi';
 export { categoryAttributeApi } from './categoryAttributeApi';
-export { productApi, productMediaApi, productSpecApi } from './productApi';
+export { productApi, productMediaApi, productSpecApi, productVariantApi } from './productApi';
 export { cartApi } from './cartApi';
 export { carouselApi } from './carouselApi';
 export { orderApi } from './orderApi';

@@ -184,6 +184,9 @@ export default function CartPage() {
                   {item.product.brand && (
                     <p className="text-xs text-indigo-500 font-medium mt-0.5">{item.product.brand.name}</p>
                   )}
+                  {item.variantOptions && item.variantOptions.length > 0 && (
+                    <p className="text-xs text-slate-500 mt-1">{item.variantOptions.join(' • ')}</p>
+                  )}
 
                   {/* Stock warning */}
                   {getItemStatus(item) === 'inactive' ? (
@@ -255,7 +258,7 @@ export default function CartPage() {
                 <div key={item.id} className="flex justify-between">
                   <span className={`truncate max-w-[60%] ${
                     isUnavailable(item) ? 'text-slate-400 line-through' : 'text-slate-500'
-                  }`}>{item.product.name} × {item.quantity}</span>
+                  }`}>{item.product.name}{item.variantSku ? ` (${item.variantSku})` : ''} × {item.quantity}</span>
                   {getItemStatus(item) === 'inactive' ? (
                     <span className="text-xs font-semibold text-slate-500">Ngưng bán</span>
                   ) : getItemStatus(item) === 'out_of_stock' ? (

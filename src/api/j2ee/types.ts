@@ -208,6 +208,46 @@ export interface ProductSpecification {
   displayOrder: number;
 }
 
+// ─── Product Variant ─────────────────────────────────────────────────────────
+export interface ProductVariantValue {
+  id: number;
+  attributeDefinition: AttributeDefinition | null;
+  attrKey: string;
+  attrValue: string | null;
+  valueNumber: number | null;
+  displayOrder: number;
+}
+
+export interface ProductVariant {
+  id: number;
+  sku: string;
+  price: number;
+  stockQuantity: number;
+  isActive: boolean;
+  displayOrder: number;
+  values: ProductVariantValue[];
+  media?: ProductMedia[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductVariantValueRequest {
+  attrDefId?: number;
+  attrKey?: string;
+  attrValue?: string;
+  valueNumber?: number;
+  displayOrder?: number;
+}
+
+export interface ProductVariantRequest {
+  sku: string;
+  price: number;
+  stockQuantity?: number;
+  isActive?: boolean;
+  displayOrder?: number;
+  values: ProductVariantValueRequest[];
+}
+
 // ─── Product ──────────────────────────────────────────────────────────────────
 export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'OUT_OF_STOCK';
 
@@ -221,6 +261,7 @@ export interface Product {
   brand: Brand | null;
   media: ProductMedia[];
   specifications: ProductSpecification[];
+  variants?: ProductVariant[];
   isActive: boolean;
   status?: ProductStatus;
   createdAt: string;
@@ -234,6 +275,7 @@ export type PaymentMethod = 'CASH' | 'VNPAY' | 'MOMO';
 
 export interface OrderItemRequest {
   productId: number;
+  variantId?: number;
   quantity: number;
 }
 
@@ -252,6 +294,9 @@ export interface OrderItemResponse {
   productId: number;
   productName: string;
   productImageUrl: string | null;
+  variantId: number | null;
+  variantSku: string | null;
+  variantOptions: string[] | null;
   quantity: number;
   unitPrice: number;
   subtotal: number;
@@ -281,12 +326,16 @@ export interface OrderResponse {
 // ─── Cart ─────────────────────────────────────────────────────────────────────
 export interface CartItemRequest {
   productId: number;
+  variantId?: number;
   quantity: number;
 }
 
 export interface CartItemResponse {
   id: number;
   product: Product;
+  variantId: number | null;
+  variantSku: string | null;
+  variantOptions: string[] | null;
   quantity: number;
   unitPrice: number;
   subtotal: number;

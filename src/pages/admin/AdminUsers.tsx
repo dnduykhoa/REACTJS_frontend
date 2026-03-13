@@ -6,8 +6,6 @@ import Pagination from '../../components/Pagination';
 
 const PAGE_SIZE = 15;
 
-const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
-
 const ALL_ROLES = ['ADMIN', 'MANAGER', 'STAFF', 'USER'];
 
 export default function AdminUsers() {

@@ -1,5 +1,12 @@
 import apiClient from './client';
-import type { ApiResponse, Product, ProductMedia, ProductSpecification } from './types';
+import type {
+  ApiResponse,
+  Product,
+  ProductMedia,
+  ProductSpecification,
+  ProductVariant,
+  ProductVariantRequest,
+} from './types';
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 export const productApi = {
@@ -173,4 +180,54 @@ export const productSpecApi = {
 
   clearAll: (productId: number) =>
     apiClient.delete<ApiResponse<null>>(`/api/products/${productId}/specifications/clear`),
+};
+
+// ─── Product Variants ────────────────────────────────────────────────────────
+export const productVariantApi = {
+  getByProduct: (productId: number, onlyActive = false) =>
+    apiClient.get<ApiResponse<ProductVariant[]>>(`/api/products/${productId}/variants`, {
+      params: { onlyActive },
+    }),
+
+  getById: (productId: number, variantId: number) =>
+    apiClient.get<ApiResponse<ProductVariant>>(`/api/products/${productId}/variants/${variantId}`),
+
+  create: (productId: number, data: ProductVariantRequest) =>
+    apiClient.post<ApiResponse<ProductVariant>>(`/api/products/${productId}/variants/add`, data),
+
+  update: (productId: number, variantId: number, data: ProductVariantRequest) =>
+    apiClient.put<ApiResponse<ProductVariant>>(`/api/products/${productId}/variants/update/${variantId}`, data),
+
+  delete: (productId: number, variantId: number) =>
+    apiClient.delete<ApiResponse<null>>(`/api/products/${productId}/variants/delete/${variantId}`),
+
+  getOptions: (productId: number) =>
+    apiClient.get<ApiResponse<Record<string, string[]>>>(`/api/products/${productId}/variants/options`),
+
+  resolve: (productId: number, selections: Record<string, string>) =>
+    apiClient.post<ApiResponse<ProductVariant>>(`/api/products/${productId}/variants/resolve`, {
+      selections,
+    }),
+
+  getMedia: (productId: number, variantId: number) =>
+    apiClient.get<ApiResponse<ProductMedia[]>>(`/api/products/${productId}/variants/${variantId}/media`),
+
+  uploadMedia: (productId: number, variantId: number, files: File[], isPrimary = true) => {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+    form.append('isPrimary', String(isPrimary));
+    return apiClient.post<ApiResponse<ProductMedia[]>>(
+      `/api/products/${productId}/variants/${variantId}/media/upload`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  },
+
+  deleteMedia: (productId: number, variantId: number, mediaId: number) =>
+    apiClient.delete<ApiResponse<null>>(`/api/products/${productId}/variants/${variantId}/media/${mediaId}`),
+
+  setPrimaryMedia: (productId: number, variantId: number, mediaId: number) =>
+    apiClient.put<ApiResponse<ProductMedia>>(
+      `/api/products/${productId}/variants/${variantId}/media/${mediaId}/set-primary`
+    ),
 };
