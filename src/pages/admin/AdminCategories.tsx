@@ -90,9 +90,6 @@ export default function AdminCategories() {
     }
   };
 
-  // Build display: show parent name
-  const getCategoryLabel = (id: number) => categories.find((c) => c.id === id)?.name || '';
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">

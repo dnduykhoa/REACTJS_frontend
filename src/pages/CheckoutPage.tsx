@@ -224,7 +224,11 @@ export default function CheckoutPage() {
         shippingAddress,
         note: form.note || undefined,
         paymentMethod,
-        items: availableItems.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
+        items: availableItems.map((i) => ({
+          productId: i.product.id,
+          variantId: i.variantId ?? undefined,
+          quantity: i.quantity,
+        })),
       });
 
       const order = res.data.data;

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { productApi } from '../api/j2ee';
-import type { Product, ProductMedia } from '../api/j2ee/types';
-import { Package, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
+import { productApi, productVariantApi } from '../api/j2ee';
+import type { Product, ProductMedia, ProductVariant } from '../api/j2ee/types';
+import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
@@ -35,20 +35,145 @@ export default function ProductDetailPage() {
   const [qty, setQty] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [cartMsg, setCartMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [thumbStartIndex, setThumbStartIndex] = useState(0);
+  const [lastManualImageInteractionAt, setLastManualImageInteractionAt] = useState<number | null>(null);
+
+  const THUMBNAIL_WINDOW_SIZE = 8;
+
+  const mediaSort = (a: ProductMedia, b: ProductMedia) => {
+    const orderDiff = (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return a.id - b.id;
+  };
+
+  const allGalleryImages = useMemo(() => {
+    const orderedVariants = [...variants].sort((a, b) => {
+      const orderDiff = (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      return a.id - b.id;
+    });
+
+    const variantImages = orderedVariants.flatMap((variant) =>
+      [...(variant.media || [])]
+        .filter((m) => m.mediaType === 'IMAGE')
+        .sort(mediaSort)
+    );
+
+    const productImages = [...(product?.media || [])]
+      .filter((m) => m.mediaType === 'IMAGE')
+      .sort(mediaSort)
+      .filter((m) => !variantImages.some((variantMedia) => variantMedia.id === m.id));
+
+    return [...variantImages, ...productImages];
+  }, [variants, product]);
+
+  const selectedVariantImages = useMemo(
+    () => [...(selectedVariant?.media || [])].filter((m) => m.mediaType === 'IMAGE').sort(mediaSort),
+    [selectedVariant]
+  );
 
   useEffect(() => {
     if (!id) return;
-    productApi
-      .getById(Number(id))
-      .then((res) => {
-        const p = res.data.data;
+    Promise.all([
+      productApi.getById(Number(id)),
+      productVariantApi.getByProduct(Number(id), true).catch(() => null),
+    ])
+      .then(([res, variantRes]) => {
+        const p = res.data.data as Product;
         setProduct(p);
         const primary = p.media?.find((m) => m.isPrimary) || p.media?.[0] || null;
         setActiveMedia(primary);
+
+        const variantList = variantRes?.data?.data || [];
+        setVariants(variantList);
+
+        if (variantList.length > 0) {
+          const firstVariant = variantList[0];
+          setSelectedVariant(firstVariant);
+
+          const defaultSelections: Record<string, string> = {};
+          firstVariant.values.forEach((value) => {
+            if (value.attrKey && value.attrValue) {
+              defaultSelections[value.attrKey] = value.attrValue;
+            }
+          });
+          setSelectedOptions(defaultSelections);
+        }
       })
       .catch(() => setError('Không tìm thấy sản phẩm'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (variants.length === 0) return;
+
+    const next = variants.find((variant) =>
+      Object.entries(selectedOptions).every(([key, value]) =>
+        variant.values.some((variantValue) => variantValue.attrKey === key && variantValue.attrValue === value)
+      )
+    ) || null;
+
+    setSelectedVariant(next);
+  }, [variants, selectedOptions]);
+
+  useEffect(() => {
+    if (!product) return;
+
+    if (selectedVariantImages.length > 0) {
+      const variantPrimary = selectedVariantImages.find((m) => m.isPrimary) || selectedVariantImages[0];
+      setActiveMedia(variantPrimary);
+      return;
+    }
+
+    if (allGalleryImages.length > 0) {
+      const fallbackPrimary = allGalleryImages.find((m) => m.isPrimary) || allGalleryImages[0];
+      setActiveMedia(fallbackPrimary);
+      return;
+    }
+
+    setActiveMedia(null);
+  }, [selectedVariant?.id, selectedVariantImages, allGalleryImages, product]);
+
+  useEffect(() => {
+    setThumbStartIndex(0);
+  }, [allGalleryImages.length]);
+
+  const images = allGalleryImages;
+  const activeIndex = activeMedia ? images.findIndex((m) => m.id === activeMedia.id) : -1;
+  const maxThumbStart = Math.max(0, images.length - THUMBNAIL_WINDOW_SIZE);
+
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    setThumbStartIndex((prev) => {
+      const clampedPrev = Math.min(prev, maxThumbStart);
+      if (activeIndex < clampedPrev) return activeIndex;
+      if (activeIndex >= clampedPrev + THUMBNAIL_WINDOW_SIZE) {
+        return Math.min(activeIndex - THUMBNAIL_WINDOW_SIZE + 1, maxThumbStart);
+      }
+      return clampedPrev;
+    });
+  }, [activeIndex, maxThumbStart]);
+
+  useEffect(() => {
+    if (images.length <= 1) return;
+
+    const timerId = window.setInterval(() => {
+      if (lastManualImageInteractionAt && Date.now() - lastManualImageInteractionAt < 5000) {
+        return;
+      }
+
+      setActiveMedia((current) => {
+        const currentIndex = current ? images.findIndex((m) => m.id === current.id) : -1;
+        const nextIndex = currentIndex >= 0 && currentIndex < images.length - 1 ? currentIndex + 1 : 0;
+        return images[nextIndex] || null;
+      });
+    }, 3000);
+
+    return () => window.clearInterval(timerId);
+  }, [images, lastManualImageInteractionAt]);
 
   if (loading) return <Spinner />;
 
@@ -64,8 +189,84 @@ export default function ProductDetailPage() {
     );
   }
 
-  const images = product.media?.filter((m) => m.mediaType === 'IMAGE') || [];
+  const showPrevImage = () => {
+    if (images.length <= 1) return;
+    setLastManualImageInteractionAt(Date.now());
+    const nextIndex = activeIndex <= 0 ? images.length - 1 : activeIndex - 1;
+    setActiveMedia(images[nextIndex]);
+  };
+
+  const showPrevThumbs = () => {
+    setThumbStartIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const showNextThumbs = () => {
+    setThumbStartIndex((prev) => Math.min(maxThumbStart, prev + 1));
+  };
+
+  const visibleThumbs = images.slice(thumbStartIndex, thumbStartIndex + THUMBNAIL_WINDOW_SIZE);
+  const canShowPrevThumbs = thumbStartIndex > 0;
+  const canShowNextThumbs = thumbStartIndex < maxThumbStart;
+
+  const showNextImage = () => {
+    if (images.length <= 1) return;
+    setLastManualImageInteractionAt(Date.now());
+    const nextIndex = activeIndex >= images.length - 1 ? 0 : activeIndex + 1;
+    setActiveMedia(images[nextIndex]);
+  };
   const specs = product.specifications || [];
+
+  const optionLabels: Record<string, string> = {};
+  const optionMap: Record<string, string[]> = {};
+  for (const variant of variants) {
+    for (const value of variant.values || []) {
+      const key = value.attrKey;
+      const optionValue = value.attrValue;
+      if (!key || !optionValue) continue;
+      if (!optionMap[key]) optionMap[key] = [];
+      if (!optionMap[key].includes(optionValue)) {
+        optionMap[key].push(optionValue);
+      }
+      if (!optionLabels[key]) {
+        optionLabels[key] = value.attributeDefinition?.name || key;
+      }
+    }
+  }
+  const hasVariants = variants.length > 0;
+  const requiredOptionKeys = Object.keys(optionMap);
+  const isSelectionComplete = !hasVariants || requiredOptionKeys.every((key) => Boolean(selectedOptions[key]));
+
+  const variantHasOption = (variant: ProductVariant, key: string, value: string) =>
+    (variant.values || []).some((variantValue) => variantValue.attrKey === key && variantValue.attrValue === value);
+
+  const isOptionAvailable = (optionKey: string, optionValue: string) => {
+    return variants.some((variant) => {
+      if (!variantHasOption(variant, optionKey, optionValue)) return false;
+      for (const [selectedKey, selectedValue] of Object.entries(selectedOptions)) {
+        if (!selectedValue || selectedKey === optionKey) continue;
+        if (!variantHasOption(variant, selectedKey, selectedValue)) return false;
+      }
+      return true;
+    });
+  };
+
+  const isSelectionValid = (selection: Record<string, string>) => {
+    const entries = Object.entries(selection).filter(([, value]) => Boolean(value));
+    if (entries.length === 0) return true;
+    return variants.some((variant) =>
+      entries.every(([key, value]) => variantHasOption(variant, key, value))
+    );
+  };
+
+  const handleOptionSelect = (optionKey: string, optionValue: string) => {
+    setSelectedOptions((prev) => {
+      const next = { ...prev, [optionKey]: optionValue };
+      if (isSelectionValid(next)) return next;
+
+      const fallback: Record<string, string> = { [optionKey]: optionValue };
+      return fallback;
+    });
+  };
 
   const grouped: Record<string, { key: string; value: string }[]> = {};
   for (const spec of specs) {
@@ -81,8 +282,10 @@ export default function ProductDetailPage() {
   }
 
   const isDiscontinued = product.status === 'INACTIVE' || (!product.isActive && product.status !== 'OUT_OF_STOCK');
-  const inStock = !isDiscontinued && product.stockQuantity > 0;
-  const canAddToCart = inStock && !isDiscontinued;
+  const currentPrice = selectedVariant?.price ?? product.price;
+  const currentStock = selectedVariant?.stockQuantity ?? product.stockQuantity;
+  const inStock = !isDiscontinued && currentStock > 0;
+  const canAddToCart = inStock && !isDiscontinued && (!hasVariants || (isSelectionComplete && !!selectedVariant));
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -92,7 +295,11 @@ export default function ProductDetailPage() {
     try {
       setAddingToCart(true);
       setCartMsg(null);
-      await addToCart(product.id, qty);
+      if (hasVariants && (!isSelectionComplete || !selectedVariant)) {
+        setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+        return;
+      }
+      await addToCart(product.id, qty, selectedVariant?.id);
       setCartMsg({ type: 'success', text: 'Đã thêm vào giỏ hàng!' });
       setTimeout(() => setCartMsg(null), 3000);
     } catch (err: unknown) {
@@ -113,7 +320,11 @@ export default function ProductDetailPage() {
     }
     try {
       setAddingToCart(true);
-      await addToCart(product.id, qty);
+      if (hasVariants && (!isSelectionComplete || !selectedVariant)) {
+        setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+        return;
+      }
+      await addToCart(product.id, qty, selectedVariant?.id);
       navigate('/checkout');
     } catch (err: unknown) {
       const msg =
@@ -141,7 +352,7 @@ export default function ProductDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
         {/* ── Media ── */}
         <div>
-          <div className="h-80 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center mb-4 border border-slate-100">
+          <div className="relative h-80 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center mb-4 border border-slate-100">
             {activeMedia ? (
               activeMedia.mediaType === 'VIDEO' ? (
                 <video src={resolveUrl(activeMedia.mediaUrl)} controls className="max-h-full" />
@@ -155,23 +366,81 @@ export default function ProductDetailPage() {
             ) : (
               <Package className="w-20 h-20 text-slate-200" />
             )}
+
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={showPrevImage}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 border border-slate-200 text-slate-700 hover:bg-white shadow-sm flex items-center justify-center"
+                  aria-label="Ảnh trước"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={showNextImage}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 border border-slate-200 text-slate-700 hover:bg-white shadow-sm flex items-center justify-center"
+                  aria-label="Ảnh tiếp theo"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
           {images.length > 1 && (
-            <div className="flex gap-2 flex-wrap">
-              {images.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setActiveMedia(m)}
-                  className={`w-16 h-16 border-2 rounded-xl overflow-hidden transition-colors ${
-                    activeMedia?.id === m.id
-                      ? 'border-indigo-500 shadow-sm'
-                      : 'border-slate-200 hover:border-indigo-300'
-                  }`}
-                >
-                  <img src={resolveUrl(m.mediaUrl)} alt="" className="object-cover w-full h-full" />
-                </button>
-              ))}
+            <div className="flex items-center gap-2 w-full">
+              <button
+                type="button"
+                onClick={showPrevThumbs}
+                disabled={!canShowPrevThumbs}
+                className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                aria-label="Lùi danh sách ảnh"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="relative flex-1 min-w-0 overflow-hidden">
+                <div className="flex gap-2 flex-nowrap">
+                  {visibleThumbs.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setLastManualImageInteractionAt(Date.now());
+                        setActiveMedia(m);
+                      }}
+                      className={`w-16 h-16 shrink-0 border-2 rounded-xl overflow-hidden transition-colors ${
+                        activeMedia?.id === m.id
+                          ? 'border-indigo-500 shadow-sm'
+                          : 'border-slate-200 hover:border-indigo-300'
+                      }`}
+                    >
+                      <img src={resolveUrl(m.mediaUrl)} alt="" className="object-cover w-full h-full" />
+                    </button>
+                  ))}
+                </div>
+
+                {canShowNextThumbs && (
+                  <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-linear-to-l from-white to-transparent" />
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={showNextThumbs}
+                disabled={!canShowNextThumbs}
+                className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                aria-label="Tiến danh sách ảnh"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
+          )}
+
+          {images.length > THUMBNAIL_WINDOW_SIZE && (
+            <p className="text-xs text-slate-500 mt-1">
+              Hiển thị {thumbStartIndex + 1}-{Math.min(thumbStartIndex + THUMBNAIL_WINDOW_SIZE, images.length)} / {images.length} ảnh
+            </p>
           )}
         </div>
 
@@ -187,9 +456,48 @@ export default function ProductDetailPage() {
 
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-extrabold text-[#e60012]">
-              {Number(product.price).toLocaleString('vi-VN')}₫
+              {Number(currentPrice).toLocaleString('vi-VN')}₫
             </p>
           </div>
+
+          {hasVariants && (
+            <div className="space-y-3 border-t border-slate-100 pt-4">
+              {Object.entries(optionMap).map(([optionKey, values]) => (
+                <div key={optionKey}>
+                  <p className="text-sm font-medium text-slate-700 mb-2">{optionLabels[optionKey]}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {values.map((value) => {
+                      const active = selectedOptions[optionKey] === value;
+                      const available = isOptionAvailable(optionKey, value);
+                      return (
+                        <button
+                          key={`${optionKey}-${value}`}
+                          type="button"
+                          onClick={() => handleOptionSelect(optionKey, value)}
+                          className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${!available
+                            ? 'border-slate-200 text-slate-400 bg-slate-100 opacity-60'
+                            : active
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-semibold'
+                              : 'border-slate-200 text-slate-600 hover:border-indigo-300'
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {hasVariants && !selectedVariant && (
+                <p className="text-xs text-rose-500">Tổ hợp lựa chọn hiện tại chưa có hàng.</p>
+              )}
+
+              {hasVariants && !isSelectionComplete && (
+                <p className="text-xs text-amber-600">Vui lòng chọn đủ tất cả thuộc tính để tiếp tục mua hàng.</p>
+              )}
+            </div>
+          )}
 
           {/* Stock & category */}
           <div className="flex flex-wrap items-center gap-3">
@@ -201,7 +509,7 @@ export default function ProductDetailPage() {
             ) : (
               <div className={`flex items-center gap-1.5 text-sm font-medium ${inStock ? 'text-emerald-600' : 'text-rose-500'}`}>
                 {inStock ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                {inStock ? `Còn hàng (${product.stockQuantity})` : 'Hết hàng'}
+                {inStock ? `Còn hàng (${currentStock})` : 'Hết hàng'}
               </div>
             )}
             {product.category && (
@@ -232,11 +540,11 @@ export default function ProductDetailPage() {
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="px-4 py-2 text-sm font-semibold text-slate-800 min-w-[2.5rem] text-center">
+                  <span className="px-4 py-2 text-sm font-semibold text-slate-800 min-w-10 text-center">
                     {qty}
                   </span>
                   <button
-                    onClick={() => setQty((q) => Math.min(product.stockQuantity, q + 1))}
+                    onClick={() => setQty((q) => Math.min(currentStock, q + 1))}
                     className="px-3 py-2 hover:bg-slate-100 transition-colors text-slate-600"
                   >
                     <Plus className="w-4 h-4" />

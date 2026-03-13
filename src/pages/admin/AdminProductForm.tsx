@@ -1,13 +1,24 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi } from '../../api/j2ee';
-import type { Product, Category, Brand, ProductMedia, ProductSpecification, CategoryAttribute } from '../../api/j2ee/types';
+import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi, productVariantApi } from '../../api/j2ee';
+import type { Product, Category, Brand, ProductMedia, ProductSpecification, CategoryAttribute, ProductVariant } from '../../api/j2ee/types';
 import { ArrowLeft, AlertCircle, Trash2, Plus } from 'lucide-react';
 
 const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
+
+type VariantDraft = {
+  tempId: string;
+  variantId?: number;
+  sku: string;
+  price: string;
+  stockQuantity: string;
+  isActive: boolean;
+  displayOrder: string;
+  optionValues: Record<number, string>;
+};
 
 function resolveUrl(url: string) {
   if (!url) return '';
@@ -52,6 +63,12 @@ export default function AdminProductForm() {
   const [attrValues, setAttrValues] = useState<Record<number, string>>({});
   // attrDefId → existing spec id (for update/delete in edit mode)
   const [attrSpecIds, setAttrSpecIds] = useState<Record<number, number>>({});
+  const [variantRows, setVariantRows] = useState<VariantDraft[]>([]);
+  const [variantAttrDraftIds, setVariantAttrDraftIds] = useState<number[]>([]);
+  const [variantAttrIds, setVariantAttrIds] = useState<number[]>([]);
+  const [variantFiles, setVariantFiles] = useState<Record<string, File[]>>({});
+  const [variantExistingMedia, setVariantExistingMedia] = useState<Record<string, ProductMedia[]>>({});
+  const [variantDeleteMediaIds, setVariantDeleteMediaIds] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     Promise.all([categoryApi.getAll(), brandApi.getAll()]).then(([c, b]) => {
@@ -61,8 +78,12 @@ export default function AdminProductForm() {
 
     if (isEdit && id) {
       setLoading(true);
-      Promise.all([productApi.getById(Number(id)), productSpecApi.getByProduct(Number(id))])
-        .then(async ([pRes, sRes]) => {
+      Promise.all([
+        productApi.getById(Number(id)),
+        productSpecApi.getByProduct(Number(id)),
+        productVariantApi.getByProduct(Number(id)).catch(() => null),
+      ])
+        .then(async ([pRes, sRes, vRes]) => {
           const p: Product = pRes.data.data;
           setForm({
             name: p.name,
@@ -77,11 +98,53 @@ export default function AdminProductForm() {
           const allSpecs: ProductSpecification[] = sRes.data.data;
           setSpecs(allSpecs);
 
+          const variants: ProductVariant[] = vRes?.data?.data || [];
+          const initialVariantMedia: Record<string, ProductMedia[]> = {};
+          setVariantRows(
+            variants.map((variant) => {
+              const optionValues: Record<number, string> = {};
+              for (const value of variant.values || []) {
+                const defId = value.attributeDefinition?.id;
+                if (defId != null && value.attrValue) {
+                  optionValues[defId] = value.attrValue;
+                }
+              }
+              const tempId = `existing-${variant.id}`;
+              initialVariantMedia[tempId] = variant.media || [];
+              return {
+                tempId,
+                variantId: variant.id,
+                sku: variant.sku,
+                price: String(variant.price),
+                stockQuantity: String(variant.stockQuantity),
+                isActive: variant.isActive,
+                displayOrder: String(variant.displayOrder),
+                optionValues,
+              };
+            })
+          );
+          setVariantExistingMedia(initialVariantMedia);
+          setVariantDeleteMediaIds({});
+          setVariantFiles({});
+
           // Load category attributes and pre-populate values from existing specs
           if (p.category) {
             const caRes = await categoryAttributeApi.getByCategory(p.category.id);
             const catAttrs = caRes.data.data;
             setCategoryAttributes(catAttrs);
+
+            const defaultAttrIds = catAttrs
+              .map((ca: CategoryAttribute) => ca.attributeDefinition.id)
+              .filter((idValue: number, index: number, arr: number[]) => arr.indexOf(idValue) === index);
+
+            const usedVariantAttrIds = variants
+              .flatMap((variant) => (variant.values || []).map((value) => value.attributeDefinition?.id))
+              .filter((idValue): idValue is number => idValue != null)
+              .filter((idValue, index, arr) => arr.indexOf(idValue) === index);
+
+            const initialVariantAttrIds = usedVariantAttrIds.length > 0 ? usedVariantAttrIds : defaultAttrIds;
+            setVariantAttrDraftIds(initialVariantAttrIds);
+            setVariantAttrIds(initialVariantAttrIds);
 
             const valMap: Record<number, string> = {};
             const specIdMap: Record<number, number> = {};
@@ -121,16 +184,36 @@ export default function AdminProductForm() {
     const catId = Number(e.target.value);
     if (catId) {
       categoryAttributeApi.getByCategory(catId).then((res) => {
-        setCategoryAttributes(res.data.data);
+        const nextAttributes: CategoryAttribute[] = res.data.data;
+        setCategoryAttributes(nextAttributes);
+        const defaultAttrIds = nextAttributes
+          .map((ca) => ca.attributeDefinition.id)
+          .filter((idValue, index, arr) => arr.indexOf(idValue) === index);
+        setVariantAttrDraftIds(defaultAttrIds);
+        setVariantAttrIds(defaultAttrIds);
         // Reset values, keeping only those that match the new category's attributes
         setAttrValues({});
         setAttrSpecIds({});
       });
     } else {
       setCategoryAttributes([]);
+      setVariantAttrDraftIds([]);
+      setVariantAttrIds([]);
       setAttrValues({});
       setAttrSpecIds({});
     }
+  };
+
+  const toggleVariantAttributeDraft = (attrDefId: number) => {
+    setVariantAttrDraftIds((prev) =>
+      prev.includes(attrDefId)
+        ? prev.filter((idValue) => idValue !== attrDefId)
+        : [...prev, attrDefId]
+    );
+  };
+
+  const applyVariantAttributes = () => {
+    setVariantAttrIds(variantAttrDraftIds);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -185,6 +268,88 @@ export default function AdminProductForm() {
         }
       }
 
+      const normalizedVariantRows = variantRows.filter(
+        (row) => row.sku.trim() !== '' && Number(row.price) > 0
+      );
+
+      if (normalizedVariantRows.length > 0 && variantAttrIds.length === 0) {
+        throw new Error('Vui lòng chọn ít nhất 1 thuộc tính dùng cho biến thể');
+      }
+
+      const selectedVariantAttributes = categoryAttributes
+        .filter((ca) => variantAttrIds.includes(ca.attributeDefinition.id))
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+
+      const existingVariantsRes = isEdit ? await productVariantApi.getByProduct(productId) : null;
+      const existingVariantIds = new Set((existingVariantsRes?.data?.data || []).map((variant) => variant.id));
+      const keptVariantIds = new Set<number>();
+
+      for (const row of normalizedVariantRows) {
+        const seenAttrDefIds = new Set<number>();
+        const rawValues = selectedVariantAttributes
+          .map((ca) => {
+            const def = ca.attributeDefinition;
+            if (seenAttrDefIds.has(def.id)) return null;
+            seenAttrDefIds.add(def.id);
+            const optionValue = (row.optionValues[def.id] ?? '').trim();
+            if (!optionValue) return null;
+            return {
+              attrDefId: def.id,
+              attrValue: optionValue,
+              displayOrder: ca.displayOrder,
+            };
+          });
+
+        const values = rawValues.filter(
+          (value): value is { attrDefId: number; attrValue: string; displayOrder: number } => value != null
+        );
+
+        if (values.length === 0) continue;
+
+        let savedVariantId: number;
+        if (row.variantId != null && existingVariantIds.has(row.variantId)) {
+          const updated = await productVariantApi.update(productId, row.variantId, {
+            sku: row.sku.trim(),
+            price: Number(row.price),
+            stockQuantity: Number(row.stockQuantity || '0'),
+            isActive: row.isActive,
+            displayOrder: Number(row.displayOrder || '0'),
+            values,
+          });
+          savedVariantId = updated.data.data.id;
+        } else {
+          const created = await productVariantApi.create(productId, {
+            sku: row.sku.trim(),
+            price: Number(row.price),
+            stockQuantity: Number(row.stockQuantity || '0'),
+            isActive: row.isActive,
+            displayOrder: Number(row.displayOrder || '0'),
+            values,
+          });
+          savedVariantId = created.data.data.id;
+        }
+
+        keptVariantIds.add(savedVariantId);
+
+        const mediaToDelete = variantDeleteMediaIds[row.tempId] || [];
+        for (const mediaId of mediaToDelete) {
+          await productVariantApi.deleteMedia(productId, savedVariantId, mediaId);
+        }
+
+        const filesForVariant = variantFiles[row.tempId] || [];
+        if (filesForVariant.length > 0) {
+          await productVariantApi.uploadMedia(productId, savedVariantId, filesForVariant, true);
+        }
+      }
+
+      if (isEdit && existingVariantsRes) {
+        for (const existingVariant of existingVariantsRes.data.data) {
+          if (!keptVariantIds.has(existingVariant.id)) {
+            await productVariantApi.delete(productId, existingVariant.id);
+          }
+        }
+      }
+
       navigate('/admin/products');
     } catch (err: unknown) {
       setError(
@@ -196,11 +361,71 @@ export default function AdminProductForm() {
     }
   };
 
+  const toggleVariantDeleteMedia = (tempId: string, mediaId: number) => {
+    setVariantDeleteMediaIds((prev) => {
+      const current = prev[tempId] || [];
+      const next = current.includes(mediaId)
+        ? current.filter((id) => id !== mediaId)
+        : [...current, mediaId];
+      return { ...prev, [tempId]: next };
+    });
+  };
+
+  const handleVariantFilesChange = (tempId: string, files: File[]) => {
+    setVariantFiles((prev) => ({ ...prev, [tempId]: files }));
+  };
+
   const toggleDeleteMedia = (mediaId: number) => {
     setDeleteMediaIds((prev) =>
       prev.includes(mediaId) ? prev.filter((id) => id !== mediaId) : [...prev, mediaId]
     );
   };
+
+  const addVariantRow = () => {
+    setVariantRows((prev) => [
+      ...prev,
+      {
+        tempId: `new-${Date.now()}-${prev.length}`,
+        sku: '',
+        price: '',
+        stockQuantity: '0',
+        isActive: true,
+        displayOrder: String(prev.length),
+        optionValues: {},
+      },
+    ]);
+  };
+
+  const updateVariantRow = (tempId: string, patch: Partial<VariantDraft>) => {
+    setVariantRows((prev) => prev.map((row) => (row.tempId === tempId ? { ...row, ...patch } : row)));
+  };
+
+  const removeVariantRow = (tempId: string) => {
+    setVariantRows((prev) => prev.filter((row) => row.tempId !== tempId));
+    setVariantFiles((prev) => {
+      const next = { ...prev };
+      delete next[tempId];
+      return next;
+    });
+    setVariantExistingMedia((prev) => {
+      const next = { ...prev };
+      delete next[tempId];
+      return next;
+    });
+    setVariantDeleteMediaIds((prev) => {
+      const next = { ...prev };
+      delete next[tempId];
+      return next;
+    });
+  };
+
+  const selectedVariantAttributes = categoryAttributes
+    .filter((ca) => variantAttrIds.includes(ca.attributeDefinition.id))
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+
+  const sortedCategoryAttributes = categoryAttributes
+    .slice()
+    .sort((a, b) => a.displayOrder - b.displayOrder);
 
   const handleAddSpec = async () => {
     if (!id) return;
@@ -392,6 +617,222 @@ export default function AdminProductForm() {
           </div>
         )}
 
+        {/* Variants */}
+        {categoryAttributes.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-slate-800">Biến thể sản phẩm</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Mỗi biến thể có SKU, giá, tồn kho và các lựa chọn riêng</p>
+              </div>
+              <button
+                type="button"
+                onClick={addVariantRow}
+                className="inline-flex items-center gap-1.5 bg-indigo-600 text-white rounded-xl px-3 py-2 text-xs font-semibold hover:bg-indigo-700 transition"
+              >
+                <Plus size={12} /> Thêm biến thể
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-700">Thuộc tính dùng để phân biệt biến thể</p>
+                <span className="text-xs text-slate-500">Đã chọn: {variantAttrIds.length}</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {sortedCategoryAttributes.map((ca) => {
+                  const def = ca.attributeDefinition;
+                  const checked = variantAttrDraftIds.includes(def.id);
+                  return (
+                    <label key={`variant-attr-${def.id}`} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleVariantAttributeDraft(def.id)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>{def.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVariantAttrDraftIds(sortedCategoryAttributes.map((ca) => ca.attributeDefinition.id))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-white"
+                >
+                  Chọn tất cả
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVariantAttrDraftIds([])}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-white"
+                >
+                  Bỏ chọn
+                </button>
+                <button
+                  type="button"
+                  onClick={applyVariantAttributes}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
+                >
+                  Áp dụng
+                </button>
+              </div>
+            </div>
+
+            {variantRows.length === 0 ? (
+              <p className="text-sm text-slate-500">Chưa có biến thể nào.</p>
+            ) : (
+              <div className="space-y-3">
+                {variantRows.map((row, index) => (
+                  <div key={row.tempId} className="border border-slate-100 rounded-xl p-4 space-y-3 bg-slate-50/60">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-700">Biến thể #{index + 1}</p>
+                      <button
+                        type="button"
+                        onClick={() => removeVariantRow(row.tempId)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className={labelClass}>SKU</label>
+                        <input
+                          value={row.sku}
+                          onChange={(e) => updateVariantRow(row.tempId, { sku: e.target.value })}
+                          className={inputClass}
+                          placeholder="IP15-128-DB"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Giá</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={row.price}
+                          onChange={(e) => updateVariantRow(row.tempId, { price: e.target.value })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Tồn kho</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={row.stockQuantity}
+                          onChange={(e) => updateVariantRow(row.tempId, { stockQuantity: e.target.value })}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Thứ tự</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={row.displayOrder}
+                          onChange={(e) => updateVariantRow(row.tempId, { displayOrder: e.target.value })}
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {selectedVariantAttributes
+                        .map((ca) => {
+                          const def = ca.attributeDefinition;
+                          return (
+                            <div key={`${row.tempId}-${def.id}`}>
+                              <label className={labelClass}>{def.name}</label>
+                              <input
+                                value={row.optionValues[def.id] || ''}
+                                onChange={(e) =>
+                                  updateVariantRow(row.tempId, {
+                                    optionValues: {
+                                      ...row.optionValues,
+                                      [def.id]: e.target.value,
+                                    },
+                                  })
+                                }
+                                className={inputClass}
+                                placeholder={`Nhập lựa chọn ${def.name.toLowerCase()}`}
+                              />
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={row.isActive}
+                        onChange={(e) => updateVariantRow(row.tempId, { isActive: e.target.checked })}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-slate-700">Biến thể đang hoạt động</span>
+                    </label>
+
+                    <div className="space-y-2">
+                      {((variantExistingMedia[row.tempId] || []).length > 0) && (
+                        <div>
+                          <p className="text-xs text-slate-500 mb-2">Ảnh biến thể hiện tại (tick để xóa):</p>
+                          <div className="flex flex-wrap gap-2">
+                            {(variantExistingMedia[row.tempId] || []).map((m) => (
+                              <div key={m.id} className="relative">
+                                <img
+                                  src={resolveUrl(m.mediaUrl)}
+                                  alt=""
+                                  className={`w-16 h-16 object-cover rounded-lg border-2 transition ${
+                                    (variantDeleteMediaIds[row.tempId] || []).includes(m.id)
+                                      ? 'border-rose-400 opacity-50'
+                                      : 'border-slate-200'
+                                  }`}
+                                />
+                                <input
+                                  type="checkbox"
+                                  checked={(variantDeleteMediaIds[row.tempId] || []).includes(m.id)}
+                                  onChange={() => toggleVariantDeleteMedia(row.tempId, m.id)}
+                                  className="absolute top-1 right-1"
+                                />
+                                {m.isPrimary && (
+                                  <span className="absolute bottom-0 left-0 bg-indigo-600 text-white text-[10px] px-1 py-0.5 rounded-br-lg">
+                                    Chính
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className={labelClass}>Upload ảnh riêng cho biến thể</label>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={(e) => handleVariantFilesChange(row.tempId, Array.from(e.target.files || []))}
+                          className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-300`}
+                        />
+                        {(variantFiles[row.tempId] || []).length > 0 && (
+                          <p className="text-xs text-slate-500 mt-1">
+                            Đã chọn {(variantFiles[row.tempId] || []).length} ảnh mới cho biến thể này.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Media */}
         <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
           <h2 className="font-semibold text-slate-800">Hình ảnh / Video</h2>
@@ -429,15 +870,13 @@ export default function AdminProductForm() {
 
           <div>
             <label className={labelClass}>Upload ảnh / video mới</label>
-            <div className="border border-dashed border-slate-300 rounded-xl px-4 py-4 bg-slate-50 hover:bg-slate-100 transition">
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={(e) => setFiles(Array.from(e.target.files || []))}
-                className="text-sm text-slate-600 w-full"
-              />
-            </div>
+            <input
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              onChange={(e) => setFiles(Array.from(e.target.files || []))}
+              className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-300`}
+            />
           </div>
         </div>
 
