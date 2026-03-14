@@ -20,6 +20,7 @@ import {
   ArrowLeft, CreditCard, Banknote, Smartphone, ChevronRight,
   LocateFixed, AlertCircle, CheckCircle2, Package, XCircle,
 } from 'lucide-react';
+import { validateVietnamesePhone, normalizePhone, formatPhoneDisplay } from '../utils/phoneUtils';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -64,12 +65,7 @@ function resolveUrl(url: string) {
   return `${BASE_URL}/${url}`;
 }
 
-function formatPhone(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 10);
-  if (digits.length <= 4) return digits;
-  if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
-  return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
-}
+const formatPhone = formatPhoneDisplay;
 
 export default function CheckoutPage() {
   const { user } = useAuth();
@@ -110,6 +106,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [success, setSuccess] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<import('../api/j2ee/types').OrderResponse | null>(null);
 
@@ -212,6 +209,7 @@ export default function CheckoutPage() {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((p) => ({ ...p, phone: formatPhone(e.target.value) }));
+    setPhoneError('');
   };
 
   // ── Cart computed values ─────────────────────────────────────────────────
@@ -228,6 +226,11 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (!form.provinceCode) return;
     setSubmitError('');
+    // Validate số điện thoại Việt Nam
+    const rawPhone = form.phone.replace(/\s/g, '');
+    const phoneErr = validateVietnamesePhone(rawPhone);
+    if (phoneErr) { setPhoneError(phoneErr); return; }
+    setPhoneError('');
     setSubmitting(true);
 
     try {
@@ -247,7 +250,7 @@ export default function CheckoutPage() {
 
       const res = await orderApi.createOrder({
         fullName: form.fullName,
-        phone: form.phone,
+        phone: normalizePhone(form.phone),
         email: form.email || undefined,
         shippingAddress,
         note: form.note || undefined,
@@ -450,16 +453,20 @@ export default function CheckoutPage() {
                       value={form.phone}
                       onChange={handlePhoneChange}
                       placeholder="0912 345 678"
-                      pattern="[0-9 ]{11,13}"
                       title="Nhập số điện thoại hợp lệ"
-                      className={`${inputClass} pl-10`}
+                      className={`${inputClass} pl-10 ${phoneError ? 'border-rose-400 ring-rose-300' : ''}`}
                     />
+                  </div>
+                  <div>
+                    {phoneError && <p className="text-xs text-rose-500 mt-1">{phoneError}</p>}
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className={labelClass}>Email</label>
+                <label className={labelClass}>
+                  Email <span className="text-rose-500">*</span>
+                </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
@@ -532,7 +539,9 @@ export default function CheckoutPage() {
               </div>
 
               <div>
-                <label className={labelClass}>Phường / Xã</label>
+                <label className={labelClass}>
+                  Phường / Xã <span className="text-rose-500">*</span>
+                </label>
                 <select
                   value={form.wardCode}
                   onChange={handleWardChange}
@@ -546,7 +555,7 @@ export default function CheckoutPage() {
                     <option key={getId(w)} value={getId(w)}>{w.name}</option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-400 mt-1">Không bắt buộc</p>
+                <p className="text-xs text-slate-400 mt-1"><span className="text-rose-500">*</span> Bắt buộc điền các trường</p>
               </div>
             </div>
 

@@ -22,7 +22,11 @@ export const orderApi = {
   getAllOrders: () =>
     apiClient.get<ApiResponse<OrderResponse[]>>('/api/orders'),
 
-  // PATCH /api/orders/:id/status — Admin cập nhật trạng thái
-  updateOrderStatus: (id: number, status: string) =>
-    apiClient.patch<ApiResponse<OrderResponse>>(`/api/orders/${id}/status`, { status }),
+  // PATCH /api/orders/:id/status — Admin cập nhật trạng thái (có thể kèm lý do huỷ)
+  updateOrderStatus: (id: number, status: string, cancelReason?: string) =>
+    apiClient.patch<ApiResponse<OrderResponse>>(`/api/orders/${id}/status`, { status, ...(cancelReason ? { cancelReason } : {}) }),
+
+  // POST /api/orders/:id/retry-payment — User thanh toán lại đơn online
+  retryPayment: (id: number) =>
+    apiClient.post<ApiResponse<OrderResponse>>(`/api/orders/${id}/retry-payment`),
 };

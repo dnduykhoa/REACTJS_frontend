@@ -13,6 +13,7 @@ import {
   LogOut,
   Monitor,
   Image,
+  ShoppingBag,
 } from 'lucide-react';
 
 const navLinks = [
@@ -25,6 +26,7 @@ const navLinks = [
   { to: '/admin/category-attributes', label: 'Thuộc tính DM', icon: Link2 },
   { to: '/admin/users', label: 'Người dùng', icon: Users },
   { to: '/admin/carousel', label: 'Carousel', icon: Image },
+  { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingBag },
 ];
 
 export default function AdminLayout() {

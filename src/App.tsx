@@ -29,6 +29,7 @@ import AdminAttributeDefinitions from './pages/admin/AdminAttributeDefinitions';
 import AdminCategoryAttributes from './pages/admin/AdminCategoryAttributes';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminCarousel from './pages/admin/AdminCarousel';
+import AdminOrders from './pages/admin/AdminOrders';
 
 export default function App() {
   return (
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="category-attributes" element={<AdminCategoryAttributes />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="carousel" element={<AdminCarousel />} />
+            <Route path="orders" element={<AdminOrders />} />
           </Route>
         </Routes>
         </CartProvider>
