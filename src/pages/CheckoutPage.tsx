@@ -260,6 +260,10 @@ export default function CheckoutPage() {
 
       const order = res.data.data;
 
+      // Xóa giỏ hàng ngay sau khi đặt hàng thành công (bất kể phương thức thanh toán)
+      // để giỏ hàng luôn sạch dù người dùng chưa thanh toán VNPAY/MoMo
+      if (!isBuyNow) await clearCart();
+
       // Nếu VNPAY → redirect trình duyệt sang cổng thanh toán
       if (paymentMethod === 'VNPAY' && order.vnpayUrl) {
         window.location.href = order.vnpayUrl;
@@ -274,8 +278,6 @@ export default function CheckoutPage() {
 
       setPlacedOrder(order);
       setSuccess(true);
-      // Chỉ xóa giỏ hàng khi checkout từ giỏ, không xóa khi Mua ngay
-      if (!isBuyNow) await clearCart();
     } catch {
       setSubmitError('Đặt hàng thất bại. Vui lòng thử lại.');
     } finally {
