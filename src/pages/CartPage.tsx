@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { ShoppingCart, Trash2, Plus, Minus, Package, ArrowRight, AlertTriangle, XCircle, Ban } from 'lucide-react';
 import { useState } from 'react';
 import type { CartItemResponse } from '../api/j2ee/types';
+import { getProductDetailPath } from '../utils/productSlug';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -163,7 +164,7 @@ export default function CartPage() {
                 }`}
               >
                 {/* Image */}
-                <Link to={`/products/${item.product.id}`} className="shrink-0">
+                <Link to={getProductDetailPath(item.product)} className="shrink-0">
                   <div className="w-20 h-20 bg-slate-50 rounded-lg overflow-hidden flex items-center justify-center border border-slate-100">
                     {imgUrl ? (
                       <img src={imgUrl} alt={item.product.name} className="object-contain w-full h-full p-1" />
@@ -176,7 +177,7 @@ export default function CartPage() {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <Link
-                    to={`/products/${item.product.id}`}
+                    to={getProductDetailPath(item.product)}
                     className="text-sm font-semibold text-slate-800 hover:text-indigo-600 line-clamp-2 transition-colors"
                   >
                     {item.product.name}
