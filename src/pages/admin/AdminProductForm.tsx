@@ -1,10 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi, productVariantApi } from '../../api/j2ee';
 import type { Product, Category, Brand, ProductMedia, ProductSpecification, CategoryAttribute, ProductVariant } from '../../api/j2ee/types';
 import { ArrowLeft, AlertCircle, Trash2, Plus, ChevronDown } from 'lucide-react';
 
-const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
+const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed disabled:opacity-70';
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
@@ -28,9 +28,11 @@ function resolveUrl(url: string) {
 }
 
 export default function AdminProductForm() {
-  const { id } = useParams<{ id: string }>();
+  const { id, variantId } = useParams<{ id: string; variantId?: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const editingVariantId = variantId ? Number(variantId) : null;
+  const isVariantEdit = editingVariantId != null && !Number.isNaN(editingVariantId);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -106,8 +108,13 @@ export default function AdminProductForm() {
               const optionValues: Record<number, string> = {};
               for (const value of variant.values || []) {
                 const defId = value.attributeDefinition?.id;
-                if (defId != null && value.attrValue) {
+                if (defId == null) continue;
+                if (value.attrValue != null && value.attrValue !== '') {
                   optionValues[defId] = value.attrValue;
+                  continue;
+                }
+                if (value.valueNumber != null) {
+                  optionValues[defId] = String(value.valueNumber);
                 }
               }
               const tempId = `existing-${variant.id}`;
@@ -124,6 +131,11 @@ export default function AdminProductForm() {
               };
             })
           );
+
+          if (isVariantEdit && !variants.some((variant) => variant.id === editingVariantId)) {
+            setError('Không tìm thấy biến thể cần chỉnh sửa');
+          }
+
           setVariantExistingMedia(initialVariantMedia);
           setVariantDeleteMediaIds({});
           setVariantFiles({});
@@ -165,7 +177,7 @@ export default function AdminProductForm() {
         })
         .finally(() => setLoading(false));
     }
-  }, [id, isEdit]);
+  }, [editingVariantId, id, isEdit, isVariantEdit]);
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -223,11 +235,34 @@ export default function AdminProductForm() {
     setError('');
     setSaving(true);
     try {
+      const rowsToPersist = isVariantEdit
+        ? variantRows.filter((row) => row.variantId === editingVariantId)
+        : variantRows;
+
+      const normalizedVariantRows = rowsToPersist.filter(
+        (row) => row.sku.trim() !== '' && Number(row.price) > 0
+      );
+
+      if (!isVariantEdit && variantRows.length > 0 && normalizedVariantRows.length === 0) {
+        throw new Error('Vui lòng nhập ít nhất 1 biến thể hợp lệ (SKU và giá > 0)');
+      }
+
+      const parentPrice = normalizedVariantRows.length > 0
+        ? Math.min(...normalizedVariantRows.map((row) => Number(row.price)))
+        : Number(form.price);
+
+      const parentStockQuantity = normalizedVariantRows.length > 0
+        ? normalizedVariantRows.reduce((sum, row) => {
+          const stock = Number(row.stockQuantity || '0');
+          return sum + (Number.isNaN(stock) ? 0 : Math.max(0, stock));
+        }, 0)
+        : Number(form.stockQuantity);
+
       const params = {
         name: form.name,
         description: form.description || undefined,
-        price: Number(form.price),
-        stockQuantity: Number(form.stockQuantity),
+        price: parentPrice,
+        stockQuantity: parentStockQuantity,
         categoryId: form.categoryId ? Number(form.categoryId) : undefined,
         brandId: form.brandId ? Number(form.brandId) : undefined,
         isActive: form.isActive,
@@ -237,7 +272,9 @@ export default function AdminProductForm() {
 
       let productId: number;
       if (isEdit && id) {
-        await productApi.update(Number(id), params);
+        if (!isVariantEdit) {
+          await productApi.update(Number(id), params);
+        }
         productId = Number(id);
       } else {
         const createRes = await productApi.create(params);
@@ -245,34 +282,32 @@ export default function AdminProductForm() {
       }
 
       // Save category attribute values as product specifications
-      for (const ca of categoryAttributes) {
-        const def = ca.attributeDefinition;
-        const val = (attrValues[def.id] ?? '').trim();
-        const existingSpecId = attrSpecIds[def.id];
-        const isNumber = def.dataType === 'NUMBER';
+      if (!isVariantEdit) {
+        for (const ca of categoryAttributes.filter((ca) => !variantAttrIds.includes(ca.attributeDefinition.id))) {
+          const def = ca.attributeDefinition;
+          const val = (attrValues[def.id] ?? '').trim();
+          const existingSpecId = attrSpecIds[def.id];
+          const isNumber = def.dataType === 'NUMBER';
 
-        if (existingSpecId) {
-          if (val === '') {
-            await productSpecApi.delete(productId, existingSpecId);
-          } else {
-            await productSpecApi.update(productId, existingSpecId, {
+          if (existingSpecId) {
+            if (val === '') {
+              await productSpecApi.delete(productId, existingSpecId);
+            } else {
+              await productSpecApi.update(productId, existingSpecId, {
+                specValue: isNumber ? undefined : val,
+                valueNumber: isNumber ? Number(val) : undefined,
+              });
+            }
+          } else if (val !== '') {
+            await productSpecApi.add(productId, {
+              attrDefId: def.id,
               specValue: isNumber ? undefined : val,
               valueNumber: isNumber ? Number(val) : undefined,
+              displayOrder: ca.displayOrder,
             });
           }
-        } else if (val !== '') {
-          await productSpecApi.add(productId, {
-            attrDefId: def.id,
-            specValue: isNumber ? undefined : val,
-            valueNumber: isNumber ? Number(val) : undefined,
-            displayOrder: ca.displayOrder,
-          });
         }
       }
-
-      const normalizedVariantRows = variantRows.filter(
-        (row) => row.sku.trim() !== '' && Number(row.price) > 0
-      );
 
       if (normalizedVariantRows.length > 0 && variantAttrIds.length === 0) {
         throw new Error('Vui lòng chọn ít nhất 1 thuộc tính dùng cho biến thể');
@@ -295,6 +330,19 @@ export default function AdminProductForm() {
             seenAttrDefIds.add(def.id);
             const optionValue = (row.optionValues[def.id] ?? '').trim();
             if (!optionValue) return null;
+
+            if (def.dataType === 'NUMBER') {
+              const numericValue = Number(optionValue);
+              if (Number.isNaN(numericValue)) {
+                throw new Error(`Giá trị biến thể của ${def.name} phải là số`);
+              }
+              return {
+                attrDefId: def.id,
+                valueNumber: numericValue,
+                displayOrder: ca.displayOrder,
+              };
+            }
+
             return {
               attrDefId: def.id,
               attrValue: optionValue,
@@ -302,9 +350,7 @@ export default function AdminProductForm() {
             };
           });
 
-        const values = rawValues.filter(
-          (value): value is { attrDefId: number; attrValue: string; displayOrder: number } => value != null
-        );
+        const values = rawValues.filter((value) => value != null);
 
         if (values.length === 0) continue;
 
@@ -344,7 +390,7 @@ export default function AdminProductForm() {
         }
       }
 
-      if (isEdit && existingVariantsRes) {
+      if (isEdit && existingVariantsRes && !isVariantEdit) {
         for (const existingVariant of existingVariantsRes.data.data) {
           if (!keptVariantIds.has(existingVariant.id)) {
             await productVariantApi.delete(productId, existingVariant.id);
@@ -425,9 +471,33 @@ export default function AdminProductForm() {
     .filter((ca) => variantAttrIds.includes(ca.attributeDefinition.id))
     .sort((a, b) => a.displayOrder - b.displayOrder);
 
+  const visibleVariantRows = isVariantEdit
+    ? variantRows.filter((row) => row.variantId === editingVariantId)
+    : variantRows;
+
   const sortedCategoryAttributes = categoryAttributes
     .slice()
     .sort((a, b) => a.displayOrder - b.displayOrder);
+
+  const nonVariantCategoryAttrs = categoryAttributes
+    .filter((ca) => !variantAttrIds.includes(ca.attributeDefinition.id))
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+
+  const variantRowsForParentPricing = useMemo(
+    () => variantRows.filter((row) => row.sku.trim() !== '' && Number(row.price) > 0),
+    [variantRows]
+  );
+
+  const shouldAutoFillParentPricing = !isVariantEdit && variantRows.length > 0;
+
+  const autoParentPrice = variantRowsForParentPricing.length > 0
+    ? Math.min(...variantRowsForParentPricing.map((row) => Number(row.price)))
+    : null;
+
+  const autoParentStock = variantRowsForParentPricing.reduce((sum, row) => {
+    const stock = Number(row.stockQuantity || '0');
+    return sum + (Number.isNaN(stock) ? 0 : Math.max(0, stock));
+  }, 0);
 
   const handleAddSpec = async () => {
     if (!id) return;
@@ -476,9 +546,15 @@ export default function AdminProductForm() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            {isEdit ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm mới'}
+            {isVariantEdit
+              ? 'Chỉnh sửa biến thể sản phẩm'
+              : isEdit
+              ? 'Chỉnh sửa sản phẩm'
+              : 'Thêm sản phẩm mới'}
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Danh sách sản phẩm</p>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {isVariantEdit ? 'Thông tin sản phẩm cha chỉ xem. Chỉ có thể chỉnh sửa thông tin biến thể bên dưới.' : 'Danh sách sản phẩm'}
+          </p>
         </div>
       </div>
 
@@ -493,6 +569,13 @@ export default function AdminProductForm() {
         <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
           <h2 className="font-semibold text-slate-800">Thông tin cơ bản</h2>
 
+          {isVariantEdit && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+              Đang chỉnh sửa biến thể — thông tin sản phẩm cha chỉ xem, không thể thay đổi.
+            </p>
+          )}
+
+          <fieldset disabled={isVariantEdit} className={isVariantEdit ? 'space-y-4 opacity-60' : 'space-y-4'}>
           <div>
             <label className={labelClass}>Tên sản phẩm <span className="text-rose-500">*</span></label>
             <input type="text" required value={form.name} onChange={set('name')} className={inputClass} placeholder="Nhập tên sản phẩm" />
@@ -522,17 +605,6 @@ export default function AdminProductForm() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Giá (VNĐ) <span className="text-rose-500">*</span></label>
-              <input type="number" required min={0} value={form.price} onChange={set('price')} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Số lượng kho <span className="text-rose-500">*</span></label>
-              <input type="number" required min={0} value={form.stockQuantity} onChange={handleStockQuantityChange} className={inputClass} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
               <label className={labelClass}>Danh mục</label>
               <select value={form.categoryId} onChange={handleCategoryChange} className={inputClass}>
                 <option value="">-- Chọn danh mục --</option>
@@ -548,87 +620,44 @@ export default function AdminProductForm() {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Giá (VNĐ) <span className="text-rose-500">*</span></label>
+              <input
+                type="number"
+                required={!shouldAutoFillParentPricing}
+                min={0}
+                value={shouldAutoFillParentPricing ? (autoParentPrice != null ? String(autoParentPrice) : '') : form.price}
+                onChange={set('price')}
+                disabled={shouldAutoFillParentPricing}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Số lượng kho <span className="text-rose-500">*</span></label>
+              <input
+                type="number"
+                required={!shouldAutoFillParentPricing}
+                min={0}
+                value={shouldAutoFillParentPricing ? String(autoParentStock) : form.stockQuantity}
+                onChange={handleStockQuantityChange}
+                disabled={shouldAutoFillParentPricing}
+                className={inputClass}
+              />
+              {shouldAutoFillParentPricing && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Tự động theo biến thể: giá thấp nhất và tổng tồn kho.
+                </p>
+              )}
+            </div>
+          </div>
+
           <label className="flex items-center gap-2.5 cursor-pointer">
             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
             <span className="text-sm text-slate-700">Hiển thị sản phẩm</span>
           </label>
+          </fieldset>
         </div>
-
-        {/* Category Attributes */}
-        {categoryAttributes.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
-            <div>
-              <h2 className="font-semibold text-slate-800">Thuộc tính sản phẩm</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Các thuộc tính theo danh mục đã chọn</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {categoryAttributes
-                .slice()
-                .sort((a, b) => a.displayOrder - b.displayOrder)
-                .map((ca) => {
-                  const def = ca.attributeDefinition;
-                  const val = attrValues[def.id] ?? '';
-                  const setVal = (v: string) =>
-                    setAttrValues((prev) => ({ ...prev, [def.id]: v }));
-                  const fieldLabel = `${def.name}${def.unit ? ` (${def.unit})` : ''}`;
-                  return (
-                    <div key={ca.id}>
-                      <label className={labelClass}>
-                        {fieldLabel}
-                        {ca.isRequired && <span className="text-rose-500 ml-0.5">*</span>}
-                        {def.attributeGroup && (
-                          <span className="ml-1.5 text-xs text-slate-400 font-normal">
-                            — {def.attributeGroup.name}
-                          </span>
-                        )}
-                      </label>
-                      {def.dataType === 'BOOLEAN' ? (
-                        <select
-                          value={val}
-                          onChange={(e) => setVal(e.target.value)}
-                          required={ca.isRequired}
-                          className={inputClass}
-                        >
-                          <option value="">-- Chọn --</option>
-                          <option value="true">Có</option>
-                          <option value="false">Không</option>
-                        </select>
-                      ) : def.dataType === 'NUMBER' ? (
-                        <input
-                          type="number"
-                          value={val}
-                          onChange={(e) => setVal(e.target.value)}
-                          required={ca.isRequired}
-                          placeholder={`Nhập${def.unit ? ' ' + def.unit : ''}`}
-                          className={inputClass}
-                        />
-                      ) : (
-                        <textarea
-                          rows={1}
-                          value={val}
-                          onChange={(e) => {
-                            setVal(e.target.value);
-                            const el = e.target;
-                            el.style.height = 'auto';
-                            el.style.height = `${el.scrollHeight}px`;
-                          }}
-                          onFocus={(e) => {
-                            const el = e.target;
-                            el.style.height = 'auto';
-                            el.style.height = `${el.scrollHeight}px`;
-                          }}
-                          required={ca.isRequired}
-                          placeholder={`Nhập ${def.name.toLowerCase()}`}
-                          className={`${inputClass} resize-none overflow-hidden`}
-                          style={{ minHeight: '2.625rem' }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        )}
 
         {/* Variants */}
         {categoryAttributes.length > 0 && (
@@ -636,15 +665,21 @@ export default function AdminProductForm() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-slate-800">Biến thể sản phẩm</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Mỗi biến thể có SKU, giá, tồn kho và các lựa chọn riêng</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {isVariantEdit
+                    ? 'Bạn đang chỉnh sửa riêng một biến thể, các biến thể khác sẽ được giữ nguyên.'
+                    : 'Mỗi biến thể có SKU, giá, tồn kho và các lựa chọn riêng'}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={addVariantRow}
-                className="inline-flex items-center gap-1.5 bg-indigo-600 text-white rounded-xl px-3 py-2 text-xs font-semibold hover:bg-indigo-700 transition"
-              >
-                <Plus size={12} /> Thêm biến thể
-              </button>
+              {!isVariantEdit && (
+                <button
+                  type="button"
+                  onClick={addVariantRow}
+                  className="inline-flex items-center gap-1.5 bg-indigo-600 text-white rounded-xl px-3 py-2 text-xs font-semibold hover:bg-indigo-700 transition"
+                >
+                  <Plus size={12} /> Thêm biến thể
+                </button>
+              )}
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
@@ -720,21 +755,25 @@ export default function AdminProductForm() {
               </div>
             </div>
 
-            {variantRows.length === 0 ? (
+            {visibleVariantRows.length === 0 ? (
               <p className="text-sm text-slate-500">Chưa có biến thể nào.</p>
             ) : (
               <div className="space-y-3">
-                {variantRows.map((row, index) => (
+                {visibleVariantRows.map((row, index) => (
                   <div key={row.tempId} className="border border-slate-100 rounded-xl p-4 space-y-3 bg-slate-50/60">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-700">Biến thể #{index + 1}</p>
-                      <button
-                        type="button"
-                        onClick={() => removeVariantRow(row.tempId)}
-                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <p className="text-sm font-semibold text-slate-700">
+                        {isVariantEdit ? 'Biến thể đang chỉnh sửa' : `Biến thể #${index + 1}`}
+                      </p>
+                      {!isVariantEdit && (
+                        <button
+                          type="button"
+                          onClick={() => removeVariantRow(row.tempId)}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -786,19 +825,53 @@ export default function AdminProductForm() {
                           return (
                             <div key={`${row.tempId}-${def.id}`}>
                               <label className={labelClass}>{def.name}</label>
-                              <input
-                                value={row.optionValues[def.id] || ''}
-                                onChange={(e) =>
-                                  updateVariantRow(row.tempId, {
-                                    optionValues: {
-                                      ...row.optionValues,
-                                      [def.id]: e.target.value,
-                                    },
-                                  })
-                                }
-                                className={inputClass}
-                                placeholder={`Nhập lựa chọn ${def.name.toLowerCase()}`}
-                              />
+                              {def.dataType === 'BOOLEAN' ? (
+                                <select
+                                  value={row.optionValues[def.id] || ''}
+                                  onChange={(e) =>
+                                    updateVariantRow(row.tempId, {
+                                      optionValues: {
+                                        ...row.optionValues,
+                                        [def.id]: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className={inputClass}
+                                >
+                                  <option value="">-- Chọn --</option>
+                                  <option value="true">Có</option>
+                                  <option value="false">Không</option>
+                                </select>
+                              ) : def.dataType === 'NUMBER' ? (
+                                <input
+                                  type="number"
+                                  value={row.optionValues[def.id] || ''}
+                                  onChange={(e) =>
+                                    updateVariantRow(row.tempId, {
+                                      optionValues: {
+                                        ...row.optionValues,
+                                        [def.id]: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className={inputClass}
+                                  placeholder={`Nhập${def.unit ? ' ' + def.unit : ''}`}
+                                />
+                              ) : (
+                                <input
+                                  value={row.optionValues[def.id] || ''}
+                                  onChange={(e) =>
+                                    updateVariantRow(row.tempId, {
+                                      optionValues: {
+                                        ...row.optionValues,
+                                        [def.id]: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className={inputClass}
+                                  placeholder={`Nhập lựa chọn ${def.name.toLowerCase()}`}
+                                />
+                              )}
                             </div>
                           );
                         })}
@@ -870,7 +943,81 @@ export default function AdminProductForm() {
           </div>
         )}
 
+        {/* Category Attributes */}
+        {nonVariantCategoryAttrs.length > 0 && !isVariantEdit && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+            <div>
+              <h2 className="font-semibold text-slate-800">Thuộc tính sản phẩm</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Các thuộc tính không phải biến thể theo danh mục đã chọn</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {nonVariantCategoryAttrs.map((ca) => {
+                  const def = ca.attributeDefinition;
+                  const val = attrValues[def.id] ?? '';
+                  const setVal = (v: string) =>
+                    setAttrValues((prev) => ({ ...prev, [def.id]: v }));
+                  const fieldLabel = `${def.name}${def.unit ? ` (${def.unit})` : ''}`;
+                  return (
+                    <div key={ca.id}>
+                      <label className={labelClass}>
+                        {fieldLabel}
+                        {ca.isRequired && <span className="text-rose-500 ml-0.5">*</span>}
+                        {def.attributeGroup && (
+                          <span className="ml-1.5 text-xs text-slate-400 font-normal">
+                            — {def.attributeGroup.name}
+                          </span>
+                        )}
+                      </label>
+                      {def.dataType === 'BOOLEAN' ? (
+                        <select
+                          value={val}
+                          onChange={(e) => setVal(e.target.value)}
+                          required={ca.isRequired}
+                          className={inputClass}
+                        >
+                          <option value="">-- Chọn --</option>
+                          <option value="true">Có</option>
+                          <option value="false">Không</option>
+                        </select>
+                      ) : def.dataType === 'NUMBER' ? (
+                        <input
+                          type="number"
+                          value={val}
+                          onChange={(e) => setVal(e.target.value)}
+                          required={ca.isRequired}
+                          placeholder={`Nhập${def.unit ? ' ' + def.unit : ''}`}
+                          className={inputClass}
+                        />
+                      ) : (
+                        <textarea
+                          rows={1}
+                          value={val}
+                          onChange={(e) => {
+                            setVal(e.target.value);
+                            const el = e.target;
+                            el.style.height = 'auto';
+                            el.style.height = `${el.scrollHeight}px`;
+                          }}
+                          onFocus={(e) => {
+                            const el = e.target;
+                            el.style.height = 'auto';
+                            el.style.height = `${el.scrollHeight}px`;
+                          }}
+                          required={ca.isRequired}
+                          placeholder={`Nhập ${def.name.toLowerCase()}`}
+                          className={`${inputClass} resize-none overflow-hidden`}
+                          style={{ minHeight: '2.625rem' }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
         {/* Media */}
+        {!isVariantEdit && (
         <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
           <h2 className="font-semibold text-slate-800">Hình ảnh / Video</h2>
 
@@ -916,9 +1063,10 @@ export default function AdminProductForm() {
             />
           </div>
         </div>
+        )}
 
         {/* Specs (edit mode only) */}
-        {isEdit && (
+        {isEdit && !isVariantEdit && (
           <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
             <h2 className="font-semibold text-slate-800">Thông số kỹ thuật</h2>
 

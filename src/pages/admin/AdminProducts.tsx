@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { productApi } from '../../api/j2ee';
-import type { Product, ProductStatus } from '../../api/j2ee/types';
-import { Package, Plus, Search, Pencil, Trash2, RotateCcw, PackageX } from 'lucide-react';
+import { productApi, productVariantApi } from '../../api/j2ee';
+import type { Product, ProductStatus, ProductVariant, ProductVariantRequest } from '../../api/j2ee/types';
+import { ChevronDown, ChevronRight, Package, Plus, Search, Pencil, Trash2, RotateCcw, PackageX } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
@@ -17,17 +17,70 @@ const TABS: { key: StatusTab; label: string }[] = [
   { key: 'out_of_stock', label: 'Hết hàng' },
 ];
 
-function getPrimaryImage(product: Product) {
-  const m = product.media?.find((m) => m.isPrimary) || product.media?.[0];
-  if (!m) return null;
-  const url = m.mediaUrl;
+function matchesTab(status: ProductStatus, tab: StatusTab) {
+  if (tab === 'all') return true;
+  if (tab === 'active') return status === 'ACTIVE';
+  if (tab === 'inactive') return status === 'INACTIVE';
+  return status === 'OUT_OF_STOCK';
+}
+
+function resolveUrl(url: string) {
+  if (!url) return '';
   if (url.startsWith('http')) return url;
   if (url.startsWith('/')) return `${BASE_URL}${url}`;
   return `${BASE_URL}/${url}`;
 }
 
-function getProductStatus(p: Product): ProductStatus {
-  return p.status ?? (p.isActive ? 'ACTIVE' : 'INACTIVE');
+function getPrimaryImage(product: Product) {
+  const media = product.media?.find((item) => item.isPrimary) || product.media?.[0];
+  return media ? resolveUrl(media.mediaUrl) : null;
+}
+
+function getVariantImage(product: Product, variant: ProductVariant) {
+  const media = variant.media?.find((item) => item.isPrimary) || variant.media?.[0] || product.media?.find((item) => item.isPrimary) || product.media?.[0];
+  return media ? resolveUrl(media.mediaUrl) : null;
+}
+
+function getProductStatus(product: Product): ProductStatus {
+  return product.status ?? (product.isActive ? 'ACTIVE' : 'INACTIVE');
+}
+
+function getVariantStatus(variant: ProductVariant): ProductStatus {
+  if (!variant.isActive) return 'INACTIVE';
+  if (variant.stockQuantity <= 0) return 'OUT_OF_STOCK';
+  return 'ACTIVE';
+}
+
+function buildVariantDetail(variant: ProductVariant) {
+  const parts = (variant.values || [])
+    .map((value) => {
+      const label = value.attributeDefinition?.name || value.attrKey;
+      const content = value.attrValue ?? (value.valueNumber != null ? String(value.valueNumber) : '');
+      return label && content ? `${label}: ${content}` : null;
+    })
+    .filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? parts.join(' • ') : 'Không có thuộc tính biến thể';
+}
+
+function buildVariantUpdatePayload(
+  variant: ProductVariant,
+  patch: Partial<Pick<ProductVariant, 'price' | 'stockQuantity' | 'isActive' | 'displayOrder' | 'sku'>>
+): ProductVariantRequest {
+  return {
+    sku: patch.sku ?? variant.sku,
+    price: patch.price ?? variant.price,
+    stockQuantity: patch.stockQuantity ?? variant.stockQuantity,
+    isActive: patch.isActive ?? variant.isActive,
+    displayOrder: patch.displayOrder ?? variant.displayOrder,
+    values: (variant.values || []).map((value) => ({
+      attrDefId: value.attributeDefinition?.id,
+      attrKey: value.attrKey,
+      attrValue: value.attrValue ?? undefined,
+      valueNumber: value.valueNumber ?? undefined,
+      displayOrder: value.displayOrder,
+    })),
+  };
 }
 
 function StatusBadge({ status }: { status: ProductStatus }) {
@@ -37,53 +90,101 @@ function StatusBadge({ status }: { status: ProductStatus }) {
     OUT_OF_STOCK: { cls: 'bg-amber-100 text-amber-700', label: 'Hết hàng' },
   };
   const { cls, label } = cfg[status];
-  return (
-    <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-semibold ${cls}`}>
-      {label}
-    </span>
-  );
+  return <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-semibold ${cls}`}>{label}</span>;
 }
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [variantsByProduct, setVariantsByProduct] = useState<Record<number, ProductVariant[]>>({});
+  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<StatusTab>('all');
-  const [actionId, setActionId] = useState<number | null>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  const loadProducts = (t: StatusTab) => {
-    setLoading(true);
-    setPage(1);
-    const req =
-      t === 'active' ? productApi.getActive() :
-      t === 'inactive' ? productApi.getInactive() :
-      t === 'out_of_stock' ? productApi.getOutOfStock() :
-      productApi.getAll();
-    req.then((r) => setProducts(r.data.data)).finally(() => setLoading(false));
+  const hydrateVariants = async (items: Product[]) => {
+    const variantEntries = await Promise.all(
+      items.map(async (product) => {
+        try {
+          const res = await productVariantApi.getByProduct(product.id);
+          return [product.id, res.data.data] as const;
+        } catch {
+          return [product.id, []] as const;
+        }
+      })
+    );
+
+    setVariantsByProduct(Object.fromEntries(variantEntries) as Record<number, ProductVariant[]>);
+    setExpandedRows(
+      Object.fromEntries(
+        variantEntries
+          .filter(([, variants]) => variants.length > 0)
+          .map(([productId]) => [productId, true])
+      )
+    );
   };
 
-  useEffect(() => { loadProducts(tab); }, [tab]);
+  const loadProducts = async (query = '') => {
+    setLoading(true);
+    setPage(1);
+    const request = query.trim() ? productApi.search(query.trim()) : productApi.getAll();
 
-  const handleTabChange = (t: StatusTab) => {
+    try {
+      const productRes = await request;
+      const items = productRes.data.data;
+      setProducts(items);
+      await hydrateVariants(items);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProducts(search);
+  }, [tab]);
+
+  const visibleVariantsByProduct = useMemo(() => {
+    return Object.fromEntries(
+      products.map((product) => {
+        const variants = variantsByProduct[product.id] || [];
+        const visibleVariants = variants.filter((variant) => matchesTab(getVariantStatus(variant), tab));
+        return [product.id, tab === 'all' ? variants : visibleVariants];
+      })
+    ) as Record<number, ProductVariant[]>;
+  }, [products, tab, variantsByProduct]);
+
+  const filteredProducts = useMemo(() => {
+    if (tab === 'all') return products;
+
+    return products.filter((product) => {
+      const productMatches = matchesTab(getProductStatus(product), tab);
+      const variantMatches = (visibleVariantsByProduct[product.id] || []).length > 0;
+      return productMatches || variantMatches;
+    });
+  }, [products, tab, visibleVariantsByProduct]);
+
+  const totalVariantCount = useMemo(
+    () => Object.values(visibleVariantsByProduct).reduce((sum, variants) => sum + variants.length, 0),
+    [visibleVariantsByProduct]
+  );
+
+  const handleTabChange = (nextTab: StatusTab) => {
     setSearch('');
-    setTab(t);
+    setTab(nextTab);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!search.trim()) { loadProducts(tab); return; }
-    setLoading(true);
-    setPage(1);
-    productApi.search(search).then((r) => setProducts(r.data.data)).finally(() => setLoading(false));
+    await loadProducts(search);
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Ngưng bán sản phẩm này? Sản phẩm sẽ chuyển sang trạng thái Ngưng bán.')) return;
-    setActionId(id);
+    setActionId(`product-${id}`);
     try {
       await productApi.delete(id);
-      loadProducts(tab);
+      await loadProducts(search);
     } catch {
       alert('Thao tác thất bại');
     } finally {
@@ -92,10 +193,10 @@ export default function AdminProducts() {
   };
 
   const handleRestore = async (id: number) => {
-    setActionId(id);
+    setActionId(`product-${id}`);
     try {
-      const res = await productApi.restore(id);
-      setProducts((prev) => prev.map((p) => (p.id === id ? res.data.data : p)));
+      await productApi.restore(id);
+      await loadProducts(search);
     } catch {
       alert('Khôi phục thất bại');
     } finally {
@@ -105,10 +206,10 @@ export default function AdminProducts() {
 
   const handleOutOfStock = async (id: number) => {
     if (!confirm('Đánh dấu sản phẩm này là hết hàng?')) return;
-    setActionId(id);
+    setActionId(`product-${id}`);
     try {
-      const res = await productApi.outOfStock(id);
-      setProducts((prev) => prev.map((p) => (p.id === id ? res.data.data : p)));
+      await productApi.outOfStock(id);
+      await loadProducts(search);
     } catch {
       alert('Thao tác thất bại');
     } finally {
@@ -116,12 +217,34 @@ export default function AdminProducts() {
     }
   };
 
+  const handleVariantUpdate = async (
+    productId: number,
+    variant: ProductVariant,
+    patch: Partial<Pick<ProductVariant, 'price' | 'stockQuantity' | 'isActive' | 'displayOrder' | 'sku'>>
+  ) => {
+    setActionId(`variant-${variant.id}`);
+    try {
+      await productVariantApi.update(productId, variant.id, buildVariantUpdatePayload(variant, patch));
+      await loadProducts(search);
+    } catch {
+      alert('Thao tác với biến thể thất bại');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const toggleExpanded = (productId: number) => {
+    setExpandedRows((prev) => ({ ...prev, [productId]: !prev[productId] }));
+  };
+
+  const pagedProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Sản phẩm</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{products.length} sản phẩm</p>
+          <p className="text-sm text-slate-500 mt-0.5">{filteredProducts.length} sản phẩm • {totalVariantCount} biến thể</p>
         </div>
         <Link
           to="/admin/products/new"
@@ -131,19 +254,16 @@ export default function AdminProducts() {
         </Link>
       </div>
 
-      {/* Status Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {TABS.map((t) => (
+        {TABS.map((item) => (
           <button
-            key={t.key}
-            onClick={() => handleTabChange(t.key)}
+            key={item.key}
+            onClick={() => handleTabChange(item.key)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${
-              tab === t.key
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+              tab === item.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
-            {t.label}
+            {item.label}
           </button>
         ))}
       </div>
@@ -160,7 +280,7 @@ export default function AdminProducts() {
           />
         </div>
         <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition">Tìm</button>
-        <button type="button" onClick={() => loadProducts(tab)} className="px-4 py-2 rounded-xl text-sm text-slate-500 hover:bg-slate-100 border border-slate-200 transition">Xóa lọc</button>
+        <button type="button" onClick={() => { setSearch(''); loadProducts(''); }} className="px-4 py-2 rounded-xl text-sm text-slate-500 hover:bg-slate-100 border border-slate-200 transition">Xóa lọc</button>
       </form>
 
       {loading ? (
@@ -174,7 +294,7 @@ export default function AdminProducts() {
               <tr className="bg-slate-50">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-10">#</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-14">Ảnh</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên sản phẩm</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tên / Biến thể</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Danh mục</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Thương hiệu</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Giá</th>
@@ -184,7 +304,7 @@ export default function AdminProducts() {
               </tr>
             </thead>
             <tbody>
-              {products.length === 0 && (
+              {filteredProducts.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center">
                     <Package size={32} className="mx-auto text-slate-300 mb-2" />
@@ -192,87 +312,181 @@ export default function AdminProducts() {
                   </td>
                 </tr>
               )}
-              {products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((p, idx) => {
-                const img = getPrimaryImage(p);
-                const status = getProductStatus(p);
-                const busy = actionId === p.id;
+
+              {pagedProducts.map((product, index) => {
+                const img = getPrimaryImage(product);
+                const status = getProductStatus(product);
+                const variants = visibleVariantsByProduct[product.id] || [];
+                const productMatchesCurrentTab = matchesTab(status, tab);
+                const busy = actionId === `product-${product.id}`;
+                const expanded = expandedRows[product.id];
+
                 return (
-                  <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-slate-400 tabular-nums">{(page - 1) * PAGE_SIZE + idx + 1}</td>
-                    <td className="px-4 py-3">
-                      {img ? (
-                        <img src={img} alt="" className="w-10 h-10 object-cover rounded-xl" />
-                      ) : (
-                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                          <Package size={16} className="text-slate-400" />
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 max-w-xs">
-                      <span className="line-clamp-1 font-medium text-slate-800">{p.name}</span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{p.category?.name || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500">{p.brand?.name || '—'}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-indigo-600">
-                      {Number(p.price).toLocaleString('vi-VN')}₫
-                    </td>
-                    <td className="px-4 py-3 text-center text-slate-600">{p.stockQuantity}</td>
-                    <td className="px-4 py-3 text-center">
-                      <StatusBadge status={status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1">
-                        <Link
-                          to={`/admin/products/${p.id}/edit`}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                          title="Chỉnh sửa"
-                        >
-                          <Pencil size={14} />
-                        </Link>
+                  <Fragment key={product.id}>
+                    {productMatchesCurrentTab && (
+                      <tr className="border-t border-slate-100 hover:bg-slate-50 transition-colors align-top">
+                        <td className="px-4 py-3 text-slate-400 tabular-nums">{(page - 1) * PAGE_SIZE + index + 1}</td>
+                        <td className="px-4 py-3">
+                          {img ? (
+                            <img src={img} alt="" className="w-10 h-10 object-cover rounded-xl" />
+                          ) : (
+                            <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+                              <Package size={16} className="text-slate-400" />
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 max-w-sm">
+                          <div className="flex items-start gap-2">
+                            {variants.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpanded(product.id)}
+                                className="mt-0.5 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                                aria-label={expanded ? 'Thu gọn biến thể' : 'Mở rộng biến thể'}
+                              >
+                                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
+                            ) : (
+                              <span className="w-6" />
+                            )}
+                            <div className="min-w-0">
+                              <span className="line-clamp-1 font-medium text-slate-800 block">{product.name}</span>
+                              {variants.length > 0 && <span className="text-xs text-slate-400 mt-0.5 block">{variants.length} biến thể</span>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-500">{product.category?.name || '—'}</td>
+                        <td className="px-4 py-3 text-slate-500">{product.brand?.name || '—'}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-indigo-600">{Number(product.price).toLocaleString('vi-VN')}₫</td>
+                        <td className="px-4 py-3 text-center text-slate-600">{product.stockQuantity}</td>
+                        <td className="px-4 py-3 text-center"><StatusBadge status={status} /></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <Link
+                              to={`/admin/products/${product.id}/edit`}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              title="Chỉnh sửa sản phẩm"
+                            >
+                              <Pencil size={14} />
+                            </Link>
+                            {status === 'ACTIVE' && (
+                              <button
+                                onClick={() => handleOutOfStock(product.id)}
+                                disabled={busy}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                                title="Đánh dấu hết hàng"
+                              >
+                                <PackageX size={14} />
+                              </button>
+                            )}
+                            {(status === 'INACTIVE' || status === 'OUT_OF_STOCK') && (
+                              <button
+                                onClick={() => handleRestore(product.id)}
+                                disabled={busy}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                                title="Khôi phục (Đang bán)"
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+                            )}
+                            {status !== 'INACTIVE' && (
+                              <button
+                                onClick={() => handleDelete(product.id)}
+                                disabled={busy}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                                title="Ngưng bán"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
 
-                        {/* Hết hàng — chỉ khi đang bán */}
-                        {status === 'ACTIVE' && (
-                          <button
-                            onClick={() => handleOutOfStock(p.id)}
-                            disabled={busy}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
-                            title="Đánh dấu hết hàng"
-                          >
-                            <PackageX size={14} />
-                          </button>
-                        )}
-
-                        {/* Khôi phục — khi ngưng bán hoặc hết hàng */}
-                        {(status === 'INACTIVE' || status === 'OUT_OF_STOCK') && (
-                          <button
-                            onClick={() => handleRestore(p.id)}
-                            disabled={busy}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
-                            title="Khôi phục (Đang bán)"
-                          >
-                            <RotateCcw size={14} />
-                          </button>
-                        )}
-
-                        {/* Ngưng bán — khi đang bán hoặc hết hàng (không áp dụng cho sản phẩm đã ngưng) */}
-                        {status !== 'INACTIVE' && (
-                          <button
-                            onClick={() => handleDelete(p.id)}
-                            disabled={busy}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
-                            title="Ngưng bán"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                    {(productMatchesCurrentTab ? expanded : true) && variants.map((variant) => {
+                      const variantImg = getVariantImage(product, variant);
+                      const variantStatus = getVariantStatus(variant);
+                      const variantBusy = actionId === `variant-${variant.id}`;
+                      return (
+                        <tr key={`${product.id}-${variant.id}`} className="border-t border-slate-100 bg-slate-50/60 hover:bg-slate-50">
+                          <td className="px-4 py-3 text-slate-300">{productMatchesCurrentTab ? '↳' : (page - 1) * PAGE_SIZE + index + 1}</td>
+                          <td className="px-4 py-3">
+                            {variantImg ? (
+                              <img src={variantImg} alt="" className="w-10 h-10 object-cover rounded-xl border border-slate-200" />
+                            ) : (
+                              <div className="w-10 h-10 bg-white rounded-xl border border-slate-200 flex items-center justify-center">
+                                <Package size={16} className="text-slate-400" />
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 max-w-sm">
+                            <div className={productMatchesCurrentTab ? 'pl-8' : ''}>
+                              <span className="line-clamp-1 font-medium text-slate-800 block">{product.name} • {variant.sku}</span>
+                              <span className="text-xs text-slate-400 block mt-0.5">{buildVariantDetail(variant)}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500">{product.category?.name || '—'}</td>
+                          <td className="px-4 py-3 text-slate-500">{product.brand?.name || '—'}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-indigo-600">{Number(variant.price).toLocaleString('vi-VN')}₫</td>
+                          <td className="px-4 py-3 text-center text-slate-600">{variant.stockQuantity}</td>
+                          <td className="px-4 py-3 text-center"><StatusBadge status={variantStatus} /></td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-1">
+                              <Link
+                                to={`/admin/products/${product.id}/variants/${variant.id}/edit`}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                title="Chỉnh sửa biến thể"
+                              >
+                                <Pencil size={14} />
+                              </Link>
+                              {variantStatus === 'ACTIVE' && (
+                                <button
+                                  onClick={() => {
+                                    if (!confirm('Đánh dấu biến thể này là hết hàng?')) return;
+                                    handleVariantUpdate(product.id, variant, { stockQuantity: 0, isActive: true });
+                                  }}
+                                  disabled={variantBusy}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                                  title="Đánh dấu biến thể hết hàng"
+                                >
+                                  <PackageX size={14} />
+                                </button>
+                              )}
+                              {(variantStatus === 'INACTIVE' || variantStatus === 'OUT_OF_STOCK') && (
+                                <button
+                                  onClick={() => handleVariantUpdate(product.id, variant, { isActive: true, stockQuantity: Math.max(variant.stockQuantity, 1) })}
+                                  disabled={variantBusy}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                                  title="Khôi phục biến thể"
+                                >
+                                  <RotateCcw size={14} />
+                                </button>
+                              )}
+                              {variantStatus !== 'INACTIVE' && (
+                                <button
+                                  onClick={() => {
+                                    if (!confirm('Ngưng bán biến thể này?')) return;
+                                    handleVariantUpdate(product.id, variant, { isActive: false });
+                                  }}
+                                  disabled={variantBusy}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                                  title="Ngưng bán biến thể"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
-          <Pagination page={page} pageCount={Math.ceil(products.length / PAGE_SIZE)} total={products.length} pageSize={PAGE_SIZE} onChange={setPage} />
+          <Pagination page={page} pageCount={Math.ceil(filteredProducts.length / PAGE_SIZE)} total={filteredProducts.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </div>
       )}
     </div>
