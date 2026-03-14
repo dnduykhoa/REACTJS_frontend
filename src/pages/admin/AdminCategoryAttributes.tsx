@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   categoryApi,
   attributeDefinitionApi,
@@ -14,6 +14,32 @@ import { Link2, Plus, Trash2, AlertCircle, CheckCircle, XCircle } from "lucide-r
 import Pagination from "../../components/Pagination";
 
 const PAGE_SIZE = 15;
+
+// Sắp xếp flat list thành cây cha → con với depth để thụt lề
+function buildCategoryTree(categories: Category[]): { cat: Category; depth: number }[] {
+  const childrenMap = new Map<number | null, Category[]>();
+  for (const cat of categories) {
+    const pid = cat.parent?.id ?? null;
+    if (!childrenMap.has(pid)) childrenMap.set(pid, []);
+    childrenMap.get(pid)!.push(cat);
+  }
+  for (const group of childrenMap.values()) {
+    group.sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+  const result: { cat: Category; depth: number }[] = [];
+  function walk(parentId: number | null, depth: number) {
+    for (const cat of childrenMap.get(parentId) ?? []) {
+      result.push({ cat, depth });
+      if (childrenMap.has(cat.id)) walk(cat.id, depth + 1);
+    }
+  }
+  walk(null, 0);
+  const addedIds = new Set(result.map((r) => r.cat.id));
+  for (const cat of categories) {
+    if (!addedIds.has(cat.id)) result.push({ cat, depth: 0 });
+  }
+  return result;
+}
 
 export default function AdminCategoryAttributes() {
 
@@ -101,6 +127,7 @@ export default function AdminCategoryAttributes() {
 
   const assignedIds = new Set(assignments.map((a) => a.attributeDefinition.id));
   const availableDefs = attrDefs.filter((d) => !assignedIds.has(d.id));
+  const sortedCategories = useMemo(() => buildCategoryTree(categories), [categories]);
 
   return (
     <div className="space-y-5">
@@ -126,22 +153,23 @@ export default function AdminCategoryAttributes() {
           </h3>
 
           <ul className="space-y-1 max-h-96 overflow-y-auto">
-            {categories.map((cat) => (
+            {sortedCategories.map(({ cat, depth }) => (
               <li key={cat.id}>
                 <button
                   onClick={() => handleSelectCategory(cat.id)}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${
+                  style={{ paddingLeft: `${12 + depth * 16}px` }}
+                  className={`w-full text-left py-2 pr-3 rounded-xl text-sm transition-colors ${
                     selectedCategoryId === cat.id
                       ? "bg-indigo-600 text-white font-medium"
                       : "hover:bg-slate-100 text-slate-700"
                   }`}
                 >
-                  {cat.name}
-                  {cat.parent && (
-                    <span className="text-xs opacity-60 ml-1">
-                      ({cat.parent.name})
+                  {depth > 0 && (
+                    <span className={`mr-1 ${selectedCategoryId === cat.id ? "text-indigo-200" : "text-slate-300"}`}>
+                      {"—".repeat(depth)}
                     </span>
                   )}
+                  {cat.name}
                 </button>
               </li>
             ))}

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { productApi, productVariantApi } from '../../api/j2ee';
-import type { Product, ProductStatus, ProductVariant, ProductVariantRequest } from '../../api/j2ee/types';
+import { productApi, productVariantApi, categoryApi } from '../../api/j2ee';
+import type { Product, ProductStatus, ProductVariant, ProductVariantRequest, Category } from '../../api/j2ee/types';
 import { ChevronDown, ChevronRight, Package, Plus, Search, Pencil, Trash2, RotateCcw, PackageX } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 
@@ -83,6 +83,63 @@ function buildVariantUpdatePayload(
   };
 }
 
+// Trả về set tất cả ID danh mục con/cháu của selectedId (bao gồm chính nó)
+// Dùng flat list + BFS để xử lý đúng mọi số cấp độ
+function getDescendantCategoryIds(categories: Category[], selectedId: number): Set<number> {
+  const parentIdMap = new Map<number, number | null>(
+    categories.map((cat) => [cat.id, cat.parent?.id ?? null])
+  );
+  const result = new Set<number>([selectedId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [id, parentId] of parentIdMap) {
+      if (!result.has(id) && parentId != null && result.has(parentId)) {
+        result.add(id);
+        changed = true;
+      }
+    }
+  }
+  return result;
+}
+
+// Trả về danh sách option đã sắp xếp theo cây (cha → con) với thông tin depth để thụt lề
+function buildCategoryOptions(categories: Category[]): { id: number; label: string }[] {
+  const parentIdMap = new Map<number, number | null>(
+    categories.map((cat) => [cat.id, cat.parent?.id ?? null])
+  );
+  const childrenMap = new Map<number | null, Category[]>();
+  for (const cat of categories) {
+    const pid = cat.parent?.id ?? null;
+    if (!childrenMap.has(pid)) childrenMap.set(pid, []);
+    childrenMap.get(pid)!.push(cat);
+  }
+  // Sắp xếp theo displayOrder trong mỗi nhóm
+  for (const group of childrenMap.values()) {
+    group.sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
+  const result: { id: number; label: string }[] = [];
+  function walk(parentId: number | null, depth: number) {
+    const children = childrenMap.get(parentId) ?? [];
+    for (const cat of children) {
+      const prefix = depth === 0 ? '' : '—'.repeat(depth) + ' ';
+      result.push({ id: cat.id, label: `${prefix}${cat.name}` });
+      if (childrenMap.has(cat.id)) walk(cat.id, depth + 1);
+    }
+  }
+  // Bắt đầu từ root (parent === null), sau đó thêm các category mồ côi nếu có
+  walk(null, 0);
+  const addedIds = new Set(result.map((r) => r.id));
+  for (const [id] of parentIdMap) {
+    if (!addedIds.has(id)) {
+      const cat = categories.find((c) => c.id === id)!;
+      result.push({ id, label: cat.name });
+    }
+  }
+  return result;
+}
+
 function StatusBadge({ status }: { status: ProductStatus }) {
   const cfg: Record<ProductStatus, { cls: string; label: string }> = {
     ACTIVE: { cls: 'bg-emerald-100 text-emerald-700', label: 'Đang bán' },
@@ -102,6 +159,8 @@ export default function AdminProducts() {
   const [tab, setTab] = useState<StatusTab>('all');
   const [actionId, setActionId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryId, setCategoryId] = useState<number | 'all'>('all');
 
   const hydrateVariants = async (items: Product[]) => {
     const variantEntries = await Promise.all(
@@ -144,6 +203,10 @@ export default function AdminProducts() {
     loadProducts(search);
   }, [tab]);
 
+  useEffect(() => {
+    categoryApi.getAll().then((res) => setCategories(res.data.data)).catch(() => {});
+  }, []);
+
   const visibleVariantsByProduct = useMemo(() => {
     return Object.fromEntries(
       products.map((product) => {
@@ -155,23 +218,36 @@ export default function AdminProducts() {
   }, [products, tab, variantsByProduct]);
 
   const filteredProducts = useMemo(() => {
-    if (tab === 'all') return products;
-
-    return products.filter((product) => {
-      const productMatches = matchesTab(getProductStatus(product), tab);
-      const variantMatches = (visibleVariantsByProduct[product.id] || []).length > 0;
-      return productMatches || variantMatches;
-    });
-  }, [products, tab, visibleVariantsByProduct]);
+    let result = products;
+    if (tab !== 'all') {
+      result = result.filter((product) => {
+        const productMatches = matchesTab(getProductStatus(product), tab);
+        const variantMatches = (visibleVariantsByProduct[product.id] || []).length > 0;
+        return productMatches || variantMatches;
+      });
+    }
+    if (categoryId !== 'all') {
+      const catSet = getDescendantCategoryIds(categories, categoryId as number);
+      result = result.filter((p) => p.category?.id != null && catSet.has(p.category.id));
+    }
+    return result;
+  }, [products, tab, visibleVariantsByProduct, categoryId, categories]);
 
   const totalVariantCount = useMemo(
     () => Object.values(visibleVariantsByProduct).reduce((sum, variants) => sum + variants.length, 0),
     [visibleVariantsByProduct]
   );
 
+  const categoryOptions = useMemo(() => buildCategoryOptions(categories), [categories]);
+
   const handleTabChange = (nextTab: StatusTab) => {
     setSearch('');
     setTab(nextTab);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryId(value === 'all' ? 'all' : Number(value));
+    setPage(1);
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -269,6 +345,16 @@ export default function AdminProducts() {
       </div>
 
       <form onSubmit={handleSearch} className="flex gap-2">
+        <select
+          value={categoryId}
+          onChange={(e) => handleCategoryChange(e.target.value)}
+          className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition min-w-[160px]"
+        >
+          <option value="all">Tất cả danh mục</option>
+          {categoryOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>{opt.label}</option>
+          ))}
+        </select>
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -280,7 +366,7 @@ export default function AdminProducts() {
           />
         </div>
         <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition">Tìm</button>
-        <button type="button" onClick={() => { setSearch(''); loadProducts(''); }} className="px-4 py-2 rounded-xl text-sm text-slate-500 hover:bg-slate-100 border border-slate-200 transition">Xóa lọc</button>
+        <button type="button" onClick={() => { setSearch(''); setCategoryId('all'); loadProducts(''); }} className="px-4 py-2 rounded-xl text-sm text-slate-500 hover:bg-slate-100 border border-slate-200 transition">Xóa lọc</button>
       </form>
 
       {loading ? (
