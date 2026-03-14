@@ -94,6 +94,7 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 export default function AdminOrders() {
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<StatusFilter>('all');
   const [page, setPage] = useState(1);
@@ -110,9 +111,19 @@ export default function AdminOrders() {
 
   const load = () => {
     setLoading(true);
+    setLoadError('');
     orderApi
       .getAllOrders()
       .then((r) => setOrders(r.data.data))
+      .catch((err: unknown) => {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 403) {
+          setLoadError('Bạn không có quyền truy cập trang đơn hàng quản trị.');
+        } else {
+          setLoadError('Không thể tải danh sách đơn hàng. Vui lòng thử lại.');
+        }
+        setOrders([]);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -261,6 +272,12 @@ export default function AdminOrders() {
       </form>
 
       {/* Table */}
+      {loadError && (
+        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm">
+          <AlertCircle size={15} className="shrink-0" /> {loadError}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-16">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
