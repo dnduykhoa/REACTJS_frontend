@@ -4,18 +4,13 @@ import { authApi } from '../api/j2ee';
 import { useAuth } from '../context/AuthContext';
 import type { UserProfileResponse, UpdateProfileRequest } from '../api/j2ee/types';
 import { User, Mail, Phone, Calendar, Shield, Lock, Pencil, ShieldCheck, ShieldOff } from 'lucide-react';
+import { validateVietnamesePhone, normalizePhone, formatPhoneDisplay } from '../utils/phoneUtils';
 
 const inputClass =
   'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors';
 const labelClass = 'block text-sm font-semibold text-slate-700 mb-1.5';
 
-// Định dạng SĐT: xxxx xxx xxx
-const formatPhone = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  if (digits.length > 7) return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 10)}`;
-  if (digits.length > 4) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
-  return digits;
-};
+const formatPhone = formatPhoneDisplay;
 
 // Định dạng ngày sinh: YYYY-MM-DD -> dd/MM/yyyy
 const formatBirthDate = (value: string) => {
@@ -80,9 +75,15 @@ export default function ProfilePage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(''); setSuccess('');
+    // Validate số điện thoại nếu có nhập
+    if (form.phone && form.phone.trim()) {
+      const phoneErr = validateVietnamesePhone(form.phone.replace(/\s/g, ''));
+      if (phoneErr) { setError(phoneErr); return; }
+    }
     setSaving(true);
     try {
-      const res = await authApi.updateProfile(Number(id), form);
+      const payload = { ...form, phone: form.phone ? normalizePhone(form.phone) : form.phone };
+      const res = await authApi.updateProfile(Number(id), payload);
       setProfile(res.data.data);
       setSuccess('Cập nhật thành công!');
       setEditing(false);

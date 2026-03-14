@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/j2ee';
 import { useAuth } from '../context/AuthContext';
 import { Monitor, Eye, EyeOff } from 'lucide-react';
+import { validateVietnamesePhone, formatPhoneDisplay, normalizePhone } from '../utils/phoneUtils';
 
 export default function RegisterPage() {
   const { login } = useAuth();
@@ -17,17 +18,8 @@ export default function RegisterPage() {
     birthDate: '',
   });
 
-  // Định dạng số điện thoại: xxxx xxx xxx
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    let formatted = digits;
-    if (digits.length > 4 && digits.length <= 7) {
-      formatted = `${digits.slice(0, 4)} ${digits.slice(4)}`;
-    } else if (digits.length > 7) {
-      formatted = `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7, 10)}`;
-    }
-    return formatted;
-  };
+  // Định dạng số điện thoại: xxxx xxx xxx (sử dụng tiện ích chung)
+  const formatPhone = formatPhoneDisplay;
 
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -47,7 +39,8 @@ export default function RegisterPage() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Email không hợp lệ";
     if (!form.password) errs.password = "Mật khẩu không được để trống";
     if (!form.confirmPassword) errs.confirmPassword = "Xác nhận mật khẩu không được để trống";
-    if (!form.phone) errs.phone = "Số điện thoại không được để trống";
+    const phoneErr = validateVietnamesePhone(form.phone.replace(/\s/g, ''));
+    if (phoneErr) errs.phone = phoneErr;
     return errs;
   };
 
@@ -72,7 +65,7 @@ export default function RegisterPage() {
         email: form.email,
         fullName: form.fullName || undefined,
         // Gửi số điện thoại không có khoảng trắng
-        phone: form.phone ? form.phone.replace(/\s/g, '') : undefined,
+        phone: form.phone ? normalizePhone(form.phone) : undefined,
         birthDate: form.birthDate || undefined,
       });
       login(res.data.data);

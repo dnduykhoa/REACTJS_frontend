@@ -48,6 +48,16 @@ function formatDate(iso: string) {
   });
 }
 
+function formatRemaining(ms: number) {
+  if (ms <= 0) return 'Đã hết hạn';
+  const totalSec = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  if (hours > 0) return `${hours}giờ ${minutes}phút ${seconds}giây`;
+  return `${minutes} phút ${seconds} giây`;
+}
+
 function Spinner() {
   return (
     <div className="flex justify-center py-24">
@@ -67,10 +77,18 @@ export default function OrderDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [cancelSuccess, setCancelSuccess] = useState(false);
+  const [retryingPayment, setRetryingPayment] = useState(false);
+  const [retryError, setRetryError] = useState('');
+  const [nowMs, setNowMs] = useState(Date.now());
   // ── Cancel modal state ──
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -112,6 +130,41 @@ export default function OrderDetailPage() {
   const canCancel =
     order.status === 'PENDING' ||
     (order.status === 'CONFIRMED' && order.paymentMethod === 'CASH');
+
+  const paymentRemainingMs = order.paymentDeadline
+    ? new Date(order.paymentDeadline).getTime() - nowMs
+    : -1;
+  const canRetryPayment =
+    order.status === 'PENDING'
+    && (order.paymentMethod === 'VNPAY' || order.paymentMethod === 'MOMO')
+    && paymentRemainingMs > 0;
+
+  const handleRetryPayment = async () => {
+    try {
+      setRetryingPayment(true);
+      setRetryError('');
+      const res = await orderApi.retryPayment(order.id);
+      const updated = res.data.data;
+      setOrder(updated);
+
+      if (updated.paymentMethod === 'VNPAY' && updated.vnpayUrl) {
+        window.location.href = updated.vnpayUrl;
+        return;
+      }
+      if (updated.paymentMethod === 'MOMO' && updated.momoUrl) {
+        window.location.href = updated.momoUrl;
+        return;
+      }
+      setRetryError('Không lấy được link thanh toán. Vui lòng thử lại.');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Không thể thanh toán lại đơn hàng.';
+      setRetryError(msg);
+    } finally {
+      setRetryingPayment(false);
+    }
+  };
 
   const finalReason = selectedReason === 'Lý do khác' ? customReason.trim() : selectedReason;
 
@@ -207,6 +260,13 @@ export default function OrderDetailPage() {
               <span className="text-slate-400">Thanh toán:</span>
               <span className="font-medium text-slate-700">{PAYMENT_LABEL[order.paymentMethod] ?? order.paymentMethod}</span>
             </div>
+            {order.paymentDeadline && order.status === 'PENDING' && (
+              <div className="flex items-center gap-2 text-amber-700 sm:col-span-2">
+                <Clock className="w-4 h-4 shrink-0" />
+                <span className="text-slate-400">Hạn thanh toán:</span>
+                <span className="font-medium">{formatDate(order.paymentDeadline)} ({formatRemaining(paymentRemainingMs)})</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.color}`}>{status.label}</span>
             </div>
@@ -327,9 +387,25 @@ export default function OrderDetailPage() {
             {cancelError}
           </div>
         )}
+        {retryError && (
+          <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-600 text-sm px-4 py-3 rounded-xl">
+            <XCircle className="w-4 h-4 shrink-0" />
+            {retryError}
+          </div>
+        )}
 
         {/* ── Action buttons ── */}
         <div className="flex flex-wrap gap-3">
+          {canRetryPayment && (
+            <button
+              onClick={handleRetryPayment}
+              disabled={retryingPayment}
+              className="flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-5 py-2.5 rounded-xl font-semibold hover:bg-amber-100 disabled:opacity-50 transition-colors text-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {retryingPayment ? 'Đang tạo link...' : 'Thanh toán lại'}
+            </button>
+          )}
           {canCancel && !cancelSuccess && (
             <button
               onClick={() => { setShowCancelModal(true); setCancelError(''); }}

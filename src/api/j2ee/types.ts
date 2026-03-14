@@ -321,6 +321,7 @@ export interface OrderResponse {
   cancelReason?: string | null;
   vnpayUrl?: string | null;
   momoUrl?: string | null;
+  paymentDeadline?: string | null;
 }
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────
