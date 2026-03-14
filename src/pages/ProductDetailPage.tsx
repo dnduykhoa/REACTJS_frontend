@@ -24,6 +24,55 @@ function Spinner() {
   );
 }
 
+function getVariantComparableValue(value: ProductVariant['values'][number]) {
+  if (value.attrValue != null && value.attrValue.trim() !== '') return value.attrValue.trim();
+  if (value.valueNumber != null) return String(value.valueNumber);
+  return '';
+}
+
+function formatBooleanValue(value: string) {
+  if (value === 'true') return 'Có';
+  if (value === 'false') return 'Không';
+  return value;
+}
+
+function formatVariantOptionValue(
+  rawValue: string,
+  dataType?: ProductVariant['values'][number]['attributeDefinition'] extends infer T
+    ? T extends { dataType: infer D }
+      ? D
+      : never
+    : never,
+  unit?: string | null
+) {
+  if (dataType === 'BOOLEAN') {
+    return formatBooleanValue(rawValue);
+  }
+  if (dataType === 'NUMBER') {
+    return unit ? `${rawValue}${unit}` : rawValue;
+  }
+  return rawValue;
+}
+
+function formatSpecDisplayValue(
+  rawValue: string,
+  dataType?: ProductVariant['values'][number]['attributeDefinition'] extends infer T
+    ? T extends { dataType: infer D }
+      ? D
+      : never
+    : never,
+  unit?: string | null
+) {
+  if (!rawValue) return '';
+  if (dataType === 'BOOLEAN') {
+    return formatBooleanValue(rawValue);
+  }
+  if (dataType === 'NUMBER') {
+    return unit ? `${rawValue} ${unit}` : rawValue;
+  }
+  return rawValue;
+}
+
 export default function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -76,6 +125,37 @@ export default function ProductDetailPage() {
     [selectedVariant]
   );
 
+  const matchingVariants = useMemo(() => {
+    const activeSelections = Object.entries(selectedOptions).filter(([, value]) => Boolean(value));
+    if (activeSelections.length === 0) {
+      return variants;
+    }
+
+    return variants.filter((variant) =>
+      activeSelections.every(([key, value]) =>
+        variant.values.some((variantValue) => variantValue.attrKey === key && getVariantComparableValue(variantValue) === value)
+      )
+    );
+  }, [variants, selectedOptions]);
+
+  const filteredGalleryImages = useMemo(() => {
+    const variantImages = matchingVariants.flatMap((variant) =>
+      [...(variant.media || [])]
+        .filter((media) => media.mediaType === 'IMAGE')
+        .sort(mediaSort)
+    );
+
+    const dedupedVariantImages = variantImages.filter(
+      (media, index, arr) => arr.findIndex((candidate) => candidate.id === media.id) === index
+    );
+
+    if (dedupedVariantImages.length > 0) {
+      return dedupedVariantImages;
+    }
+
+    return allGalleryImages;
+  }, [allGalleryImages, matchingVariants]);
+
   useEffect(() => {
     const productId = extractProductIdFromSlug(slug);
     if (!productId) {
@@ -112,8 +192,9 @@ export default function ProductDetailPage() {
 
           const defaultSelections: Record<string, string> = {};
           firstVariant.values.forEach((value) => {
-            if (value.attrKey && value.attrValue) {
-              defaultSelections[value.attrKey] = value.attrValue;
+            const comparable = getVariantComparableValue(value);
+            if (value.attrKey && comparable) {
+              defaultSelections[value.attrKey] = comparable;
             }
           });
           setSelectedOptions(defaultSelections);
@@ -128,7 +209,7 @@ export default function ProductDetailPage() {
 
     const next = variants.find((variant) =>
       Object.entries(selectedOptions).every(([key, value]) =>
-        variant.values.some((variantValue) => variantValue.attrKey === key && variantValue.attrValue === value)
+        variant.values.some((variantValue) => variantValue.attrKey === key && getVariantComparableValue(variantValue) === value)
       )
     ) || null;
 
@@ -138,26 +219,30 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (!product) return;
 
-    if (selectedVariantImages.length > 0) {
-      const variantPrimary = selectedVariantImages.find((m) => m.isPrimary) || selectedVariantImages[0];
-      setActiveMedia(variantPrimary);
-      return;
-    }
+    setActiveMedia((current) => {
+      const imagePool = filteredGalleryImages;
+      if (imagePool.length === 0) {
+        return null;
+      }
 
-    if (allGalleryImages.length > 0) {
-      const fallbackPrimary = allGalleryImages.find((m) => m.isPrimary) || allGalleryImages[0];
-      setActiveMedia(fallbackPrimary);
-      return;
-    }
+      if (current && imagePool.some((media) => media.id === current.id)) {
+        return current;
+      }
 
-    setActiveMedia(null);
-  }, [selectedVariant?.id, selectedVariantImages, allGalleryImages, product]);
+      const variantPrimary = selectedVariantImages.find((media) => media.isPrimary);
+      if (variantPrimary && imagePool.some((media) => media.id === variantPrimary.id)) {
+        return variantPrimary;
+      }
+
+      return imagePool.find((media) => media.isPrimary) || imagePool[0];
+    });
+  }, [selectedVariant?.id, selectedVariantImages, filteredGalleryImages, product]);
 
   useEffect(() => {
     setThumbStartIndex(0);
-  }, [allGalleryImages.length]);
+  }, [filteredGalleryImages.length, selectedVariant?.id]);
 
-  const images = allGalleryImages;
+  const images = filteredGalleryImages;
   const activeIndex = activeMedia ? images.findIndex((m) => m.id === activeMedia.id) : -1;
   const maxThumbStart = Math.max(0, images.length - THUMBNAIL_WINDOW_SIZE);
 
@@ -232,28 +317,85 @@ export default function ProductDetailPage() {
   };
   const specs = product.specifications || [];
 
+  const variantOverrideByDefId = new Map<number, string>();
+  const variantOverrideByAttrKey = new Map<string, string>();
+  for (const value of selectedVariant?.values || []) {
+    const normalizedValue = getVariantComparableValue(value);
+    if (!normalizedValue) continue;
+    const defId = value.attributeDefinition?.id;
+    if (defId != null) {
+      variantOverrideByDefId.set(defId, normalizedValue);
+    }
+    const attrKey = value.attrKey?.trim().toLowerCase();
+    if (attrKey) {
+      variantOverrideByAttrKey.set(attrKey, normalizedValue);
+    }
+    const defAttrKey = value.attributeDefinition?.attrKey?.trim().toLowerCase();
+    if (defAttrKey) {
+      variantOverrideByAttrKey.set(defAttrKey, normalizedValue);
+    }
+  }
+
   const optionLabels: Record<string, string> = {};
   const optionMap: Record<string, string[]> = {};
+  const optionDisplayMap: Record<string, Record<string, string>> = {};
+  const optionDisplayMapLower: Record<string, Record<string, string>> = {};
+  const variantOptionDefIdToKeyLower = new Map<number, string>();
   for (const variant of variants) {
     for (const value of variant.values || []) {
       const key = value.attrKey;
-      const optionValue = value.attrValue;
+      const normalizedKey = key?.trim().toLowerCase();
+      const optionValue = getVariantComparableValue(value);
       if (!key || !optionValue) continue;
       if (!optionMap[key]) optionMap[key] = [];
       if (!optionMap[key].includes(optionValue)) {
         optionMap[key].push(optionValue);
       }
+      if (!optionDisplayMap[key]) optionDisplayMap[key] = {};
+      optionDisplayMap[key][optionValue] = formatVariantOptionValue(
+        optionValue,
+        value.attributeDefinition?.dataType,
+        value.attributeDefinition?.unit
+      );
       if (!optionLabels[key]) {
         optionLabels[key] = value.attributeDefinition?.name || key;
       }
+
+      if (normalizedKey) {
+        if (!optionDisplayMapLower[normalizedKey]) optionDisplayMapLower[normalizedKey] = {};
+        optionDisplayMapLower[normalizedKey][optionValue] = optionDisplayMap[key][optionValue];
+      }
+
+      const defId = value.attributeDefinition?.id;
+      if (defId != null && normalizedKey) {
+        variantOptionDefIdToKeyLower.set(defId, normalizedKey);
+      }
+
+      const defAttrKey = value.attributeDefinition?.attrKey?.trim().toLowerCase();
+      if (defAttrKey) {
+        if (!optionDisplayMapLower[defAttrKey]) optionDisplayMapLower[defAttrKey] = {};
+        optionDisplayMapLower[defAttrKey][optionValue] = optionDisplayMap[key][optionValue];
+        if (defId != null && !variantOptionDefIdToKeyLower.has(defId)) {
+          variantOptionDefIdToKeyLower.set(defId, defAttrKey);
+        }
+      }
     }
+  }
+
+  const selectedOptionsByKeyLower = new Map<string, string>();
+  for (const [selectedKey, selectedValue] of Object.entries(selectedOptions)) {
+    const normalizedSelectedKey = selectedKey.trim().toLowerCase();
+    if (!normalizedSelectedKey || !selectedValue) continue;
+    selectedOptionsByKeyLower.set(normalizedSelectedKey, selectedValue);
   }
   const hasVariants = variants.length > 0;
   const requiredOptionKeys = Object.keys(optionMap);
   const isSelectionComplete = !hasVariants || requiredOptionKeys.every((key) => Boolean(selectedOptions[key]));
 
   const variantHasOption = (variant: ProductVariant, key: string, value: string) =>
-    (variant.values || []).some((variantValue) => variantValue.attrKey === key && variantValue.attrValue === value);
+    (variant.values || []).some(
+      (variantValue) => variantValue.attrKey === key && getVariantComparableValue(variantValue) === value
+    );
 
   const isOptionAvailable = (optionKey: string, optionValue: string) => {
     return variants.some((variant) => {
@@ -284,17 +426,115 @@ export default function ProductDetailPage() {
     });
   };
 
-  const grouped: Record<string, { key: string; value: string }[]> = {};
+  const specRows: Array<{
+    group: string;
+    key: string;
+    baseValue: string;
+    attrDefId?: number;
+    attrKey?: string;
+    dataType?: ProductVariant['values'][number]['attributeDefinition'] extends infer T
+      ? T extends { dataType: infer D }
+        ? D
+        : never
+      : never;
+    unit?: string | null;
+  }> = [];
+
+  const existingDefIds = new Set<number>();
+  const existingAttrKeys = new Set<string>();
+
   for (const spec of specs) {
     const group = spec.attributeDefinition?.attributeGroup?.name || 'Thông số khác';
     const key = spec.attributeDefinition?.name || spec.specKey || '';
-    const value =
+    const dataType = spec.attributeDefinition?.dataType;
+    const unit = spec.attributeDefinition?.unit;
+    const attrDefId = spec.attributeDefinition?.id;
+    const attrKey = spec.attributeDefinition?.attrKey?.trim().toLowerCase() || spec.specKey?.trim().toLowerCase() || undefined;
+    const baseValue =
       spec.specValue ||
       (spec.valueNumber != null
-        ? `${spec.valueNumber}${spec.attributeDefinition?.unit ? ' ' + spec.attributeDefinition.unit : ''}`
+        ? formatSpecDisplayValue(String(spec.valueNumber), dataType, unit)
         : '');
-    if (!grouped[group]) grouped[group] = [];
-    grouped[group].push({ key, value });
+
+    if (attrDefId != null) existingDefIds.add(attrDefId);
+    if (attrKey) existingAttrKeys.add(attrKey);
+
+    specRows.push({
+      group,
+      key,
+      baseValue,
+      attrDefId,
+      attrKey,
+      dataType,
+      unit,
+    });
+  }
+
+  for (const variant of variants) {
+    for (const variantValue of variant.values || []) {
+      const defId = variantValue.attributeDefinition?.id;
+      const fallbackAttrKey = variantValue.attributeDefinition?.attrKey?.trim().toLowerCase() || variantValue.attrKey?.trim().toLowerCase() || '';
+      if (defId != null && existingDefIds.has(defId)) continue;
+      if (defId == null && fallbackAttrKey && existingAttrKeys.has(fallbackAttrKey)) continue;
+
+      const key = variantValue.attributeDefinition?.name || variantValue.attrKey || '';
+      if (!key) continue;
+
+      const rawValue = getVariantComparableValue(variantValue);
+      const dataType = variantValue.attributeDefinition?.dataType;
+      const unit = variantValue.attributeDefinition?.unit;
+      const baseValue = formatSpecDisplayValue(rawValue, dataType, unit);
+
+      if (defId != null) existingDefIds.add(defId);
+      if (fallbackAttrKey) existingAttrKeys.add(fallbackAttrKey);
+
+      specRows.push({
+        group: variantValue.attributeDefinition?.attributeGroup?.name || 'Thông số khác',
+        key,
+        baseValue,
+        attrDefId: defId,
+        attrKey: fallbackAttrKey || undefined,
+        dataType,
+        unit,
+      });
+    }
+  }
+
+  const grouped: Record<string, { key: string; value: string }[]> = {};
+  for (const row of specRows) {
+    const rowVariantOptionKey = row.attrDefId != null
+      ? variantOptionDefIdToKeyLower.get(row.attrDefId)
+      : undefined;
+    const normalizedRowAttrKey = row.attrKey?.trim().toLowerCase();
+    const variantDimensionKey = normalizedRowAttrKey || rowVariantOptionKey;
+    const isVariantDimension = Boolean(variantDimensionKey && optionDisplayMapLower[variantDimensionKey]);
+
+    if (isVariantDimension && variantDimensionKey) {
+      const selectedOptionRawValue = selectedOptionsByKeyLower.get(variantDimensionKey);
+      const value = selectedOptionRawValue
+        ? optionDisplayMapLower[variantDimensionKey]?.[selectedOptionRawValue] ||
+          formatSpecDisplayValue(selectedOptionRawValue, row.dataType, row.unit)
+        : '-';
+
+      if (!grouped[row.group]) grouped[row.group] = [];
+      grouped[row.group].push({ key: row.key, value });
+      continue;
+    }
+
+    let overrideValue = '';
+    if (row.attrDefId != null) {
+      overrideValue = variantOverrideByDefId.get(row.attrDefId) || '';
+    }
+    if (!overrideValue && row.attrKey) {
+      overrideValue = variantOverrideByAttrKey.get(row.attrKey) || '';
+    }
+
+    const value = overrideValue
+      ? formatSpecDisplayValue(overrideValue, row.dataType, row.unit)
+      : row.baseValue;
+
+    if (!grouped[row.group]) grouped[row.group] = [];
+    grouped[row.group].push({ key: row.key, value });
   }
 
   const isDiscontinued = product.status === 'INACTIVE' || (!product.isActive && product.status !== 'OUT_OF_STOCK');
@@ -497,7 +737,7 @@ export default function ProductDetailPage() {
                               : 'border-slate-200 text-slate-600 hover:border-indigo-300'
                           }`}
                         >
-                          {value}
+                          {optionDisplayMap[optionKey]?.[value] || formatBooleanValue(value)}
                         </button>
                       );
                     })}

@@ -58,6 +58,7 @@ export default function App() {
             <Route path="products" element={<AdminProducts />} />
             <Route path="products/new" element={<AdminProductForm />} />
             <Route path="products/:id/edit" element={<AdminProductForm />} />
+            <Route path="products/:id/variants/:variantId/edit" element={<AdminProductForm />} />
             <Route path="categories" element={<AdminCategories />} />
             <Route path="brands" element={<AdminBrands />} />
             <Route path="attribute-groups" element={<AdminAttributeGroups />} />
