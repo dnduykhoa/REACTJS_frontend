@@ -4,6 +4,7 @@ import type { Product, ProductStatus } from '../api/j2ee/types';
 import { Package, ShoppingCart, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { getProductDetailPath } from '../utils/productSlug';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -60,7 +61,7 @@ export default function ProductCard({ product }: { product: Product }) {
       unavailable ? 'opacity-70 grayscale-[25%]' : 'hover:shadow-lg hover:-translate-y-1'
     }`}>
       {/* Image */}
-      <Link to={`/products/${product.id}`} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden block">
+      <Link to={getProductDetailPath(product)} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden block">
         {imgUrl ? (
           <img
             src={imgUrl}
@@ -86,7 +87,7 @@ export default function ProductCard({ product }: { product: Product }) {
             {product.brand.name}
           </p>
         )}
-        <Link to={`/products/${product.id}`} className="flex-1">
+        <Link to={getProductDetailPath(product)} className="flex-1">
           <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug hover:text-indigo-600 transition-colors">
             {product.name}
           </h3>

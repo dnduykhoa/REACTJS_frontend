@@ -5,6 +5,7 @@ import type { Product, ProductMedia, ProductVariant } from '../api/j2ee/types';
 import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { buildProductSlug, extractProductIdFromSlug } from '../utils/productSlug';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -24,7 +25,7 @@ function Spinner() {
 }
 
 export default function ProductDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addToCart } = useCart();
@@ -76,14 +77,29 @@ export default function ProductDetailPage() {
   );
 
   useEffect(() => {
-    if (!id) return;
+    const productId = extractProductIdFromSlug(slug);
+    if (!productId) {
+      setError('Không tìm thấy sản phẩm');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
     Promise.all([
-      productApi.getById(Number(id)),
-      productVariantApi.getByProduct(Number(id), true).catch(() => null),
+      productApi.getById(productId),
+      productVariantApi.getByProduct(productId, true).catch(() => null),
     ])
       .then(([res, variantRes]) => {
         const p = res.data.data as Product;
         setProduct(p);
+
+        const canonicalSlug = buildProductSlug(p);
+        if (slug !== canonicalSlug) {
+          navigate(`/products/${canonicalSlug}`, { replace: true });
+        }
+
         const primary = p.media?.find((m) => m.isPrimary) || p.media?.[0] || null;
         setActiveMedia(primary);
 
@@ -105,7 +121,7 @@ export default function ProductDetailPage() {
       })
       .catch(() => setError('Không tìm thấy sản phẩm'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [slug, navigate]);
 
   useEffect(() => {
     if (variants.length === 0) return;
