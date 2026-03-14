@@ -96,7 +96,7 @@ export default function OrderSuccessScreen({ order, subtitle, onViewOrders }: Pr
         {/* Total */}
         <div className="flex justify-between font-bold text-slate-800 border-t border-slate-100 pt-3">
           <span>Tổng cộng</span>
-          <span className="text-indigo-600">
+          <span className="text-[#e60012]">
             {Number(order.totalAmount).toLocaleString('vi-VN')}₫
           </span>
         </div>

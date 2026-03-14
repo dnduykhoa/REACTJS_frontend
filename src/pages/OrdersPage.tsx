@@ -7,6 +7,7 @@ import OrderSuccessScreen from '../components/OrderSuccessScreen';
 import {
   Package, ChevronDown, ChevronUp, ShoppingBag,
   MapPin, Phone, CreditCard, FileText, Clock,
+  XCircle, RefreshCw,
 } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
@@ -289,6 +290,57 @@ export default function OrdersPage() {
         subtitle="Thanh toán MoMo thành công. Cảm ơn bạn đã đặt hàng!"
         onViewOrders={() => { setMomoOrder(null); navigate('/orders', { replace: true }); }}
       />
+    );
+  }
+
+  // ── Màn hình thanh toán thất bại ──────────────────────────────────────────
+  if ((vnpayFailed || momoFailed) && !loading) {
+    const failedOrderCode = vnpayOrderCode || momoOrderCode;
+    const failedOrder = orders.find((o) => o.orderCode === failedOrderCode);
+    const canRetry = failedOrder ? canRetryPayment(failedOrder) : false;
+
+    return (
+      <div className="max-w-xl mx-auto px-4 py-12">
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-10 h-10 text-rose-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-1">Thanh toán không thành công</h2>
+          <p className="text-slate-500 text-sm">
+            {vnpayFailed
+              ? 'Giao dịch VNPAY không hoàn tất.'
+              : 'Giao dịch MoMo không hoàn tất.'}{' '}
+            {failedOrderCode && (
+              <span>Đơn hàng <span className="font-semibold text-slate-700">{failedOrderCode}</span> vẫn đang chờ thanh toán.</span>
+            )}
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          {canRetry && failedOrder && (
+            <button
+              onClick={() => handleRetryPayment(failedOrder)}
+              disabled={retryingOrderId === failedOrder.id}
+              className="flex-1 inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              {retryingOrderId === failedOrder.id ? 'Đang tạo link...' : 'Thanh toán lại'}
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/orders', { replace: true })}
+            className="flex-1 inline-flex items-center justify-center gap-2 border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-colors text-sm"
+          >
+            Xem đơn hàng của tôi
+          </button>
+          <Link
+            to="/products"
+            className="flex-1 inline-flex items-center justify-center gap-2 border border-slate-200 text-slate-600 px-6 py-2.5 rounded-xl font-semibold hover:bg-slate-50 transition-colors text-sm"
+          >
+            Tiếp tục mua sắm
+          </Link>
+        </div>
+      </div>
     );
   }
 
