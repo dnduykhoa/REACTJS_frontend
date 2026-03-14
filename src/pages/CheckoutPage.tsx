@@ -368,6 +368,10 @@ export default function CheckoutPage() {
     );
   }
 
+  if (success && placedOrder) {
+    return <OrderSuccessScreen order={placedOrder} />;
+  }
+
   if (!isBuyNow && (!cart || availableItems.length === 0)) {
     return (
       <div className="text-center py-24">
@@ -378,10 +382,6 @@ export default function CheckoutPage() {
         </Link>
       </div>
     );
-  }
-
-  if (success && placedOrder) {
-    return <OrderSuccessScreen order={placedOrder} />;
   }
 
   return (
