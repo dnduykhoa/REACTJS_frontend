@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi, productVariantApi } from '../../api/j2ee';
 import type { Product, Category, Brand, ProductMedia, ProductSpecification, CategoryAttribute, ProductVariant } from '../../api/j2ee/types';
-import { ArrowLeft, AlertCircle, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Trash2, Plus, ChevronDown } from 'lucide-react';
 
 const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
@@ -66,6 +66,7 @@ export default function AdminProductForm() {
   const [variantRows, setVariantRows] = useState<VariantDraft[]>([]);
   const [variantAttrDraftIds, setVariantAttrDraftIds] = useState<number[]>([]);
   const [variantAttrIds, setVariantAttrIds] = useState<number[]>([]);
+  const [variantAttrDropdownOpen, setVariantAttrDropdownOpen] = useState(false);
   const [variantFiles, setVariantFiles] = useState<Record<string, File[]>>({});
   const [variantExistingMedia, setVariantExistingMedia] = useState<Record<string, ProductMedia[]>>({});
   const [variantDeleteMediaIds, setVariantDeleteMediaIds] = useState<Record<string, number[]>>({});
@@ -214,6 +215,7 @@ export default function AdminProductForm() {
 
   const applyVariantAttributes = () => {
     setVariantAttrIds(variantAttrDraftIds);
+    setVariantAttrDropdownOpen(false);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -602,12 +604,23 @@ export default function AdminProductForm() {
                         />
                       ) : (
                         <textarea
-                          rows={3}
+                          rows={1}
                           value={val}
-                          onChange={(e) => setVal(e.target.value)}
+                          onChange={(e) => {
+                            setVal(e.target.value);
+                            const el = e.target;
+                            el.style.height = 'auto';
+                            el.style.height = `${el.scrollHeight}px`;
+                          }}
+                          onFocus={(e) => {
+                            const el = e.target;
+                            el.style.height = 'auto';
+                            el.style.height = `${el.scrollHeight}px`;
+                          }}
                           required={ca.isRequired}
                           placeholder={`Nhập ${def.name.toLowerCase()}`}
-                          className={inputClass}
+                          className={`${inputClass} resize-none overflow-hidden`}
+                          style={{ minHeight: '2.625rem' }}
                         />
                       )}
                     </div>
@@ -636,50 +649,74 @@ export default function AdminProductForm() {
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-700">Thuộc tính dùng để phân biệt biến thể</p>
+                <p className="text-sm font-semibold text-slate-700">Thuộc tính biến thể</p>
                 <span className="text-xs text-slate-500">Đã chọn: {variantAttrIds.length}</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {sortedCategoryAttributes.map((ca) => {
-                  const def = ca.attributeDefinition;
-                  const checked = variantAttrDraftIds.includes(def.id);
-                  return (
-                    <label key={`variant-attr-${def.id}`} className="flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleVariantAttributeDraft(def.id)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <span>{def.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
+              <div className="flex flex-col md:flex-row md:items-center gap-2">
+                <div className="relative md:w-80 lg:w-96 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setVariantAttrDropdownOpen((prev) => !prev)}
+                    className="w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 hover:border-slate-300"
+                  >
+                    <span className="truncate text-left">
+                      {variantAttrDraftIds.length > 0
+                        ? `Đã chọn nháp ${variantAttrDraftIds.length} thuộc tính`
+                        : 'Chọn thuộc tính phân biệt'}
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`text-slate-400 transition-transform ${variantAttrDropdownOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setVariantAttrDraftIds(sortedCategoryAttributes.map((ca) => ca.attributeDefinition.id))}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-white"
-                >
-                  Chọn tất cả
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVariantAttrDraftIds([])}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-white"
-                >
-                  Bỏ chọn
-                </button>
-                <button
-                  type="button"
-                  onClick={applyVariantAttributes}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
-                >
-                  Áp dụng
-                </button>
+                  {variantAttrDropdownOpen && (
+                    <div className="absolute z-20 mt-2 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-sm max-h-64 overflow-auto">
+                      <div className="space-y-1">
+                        {sortedCategoryAttributes.map((ca) => {
+                          const def = ca.attributeDefinition;
+                          const checked = variantAttrDraftIds.includes(def.id);
+                          return (
+                            <label key={`variant-attr-${def.id}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleVariantAttributeDraft(def.id)}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span>{def.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVariantAttrDraftIds(sortedCategoryAttributes.map((ca) => ca.attributeDefinition.id))}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-white"
+                  >
+                    Chọn tất cả
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVariantAttrDraftIds([])}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-white"
+                  >
+                    Bỏ chọn
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyVariantAttributes}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700"
+                  >
+                    Áp dụng
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -781,7 +818,7 @@ export default function AdminProductForm() {
                       {((variantExistingMedia[row.tempId] || []).length > 0) && (
                         <div>
                           <p className="text-xs text-slate-500 mb-2">Ảnh biến thể hiện tại (tick để xóa):</p>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             {(variantExistingMedia[row.tempId] || []).map((m) => (
                               <div key={m.id} className="relative">
                                 <img
@@ -840,7 +877,7 @@ export default function AdminProductForm() {
           {existingMedia.length > 0 && (
             <div>
               <p className="text-xs text-slate-500 mb-2">Ảnh hiện tại (tick để xóa):</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {existingMedia.map((m) => (
                   <div key={m.id} className="relative">
                     <img
