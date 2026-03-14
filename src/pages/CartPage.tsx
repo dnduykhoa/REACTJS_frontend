@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ShoppingCart, Trash2, Plus, Minus, Package, ArrowRight, AlertTriangle, XCircle, Ban } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CartItemResponse } from '../api/j2ee/types';
 import { getProductDetailPath } from '../utils/productSlug';
 
@@ -25,12 +25,40 @@ function Spinner() {
 
 export default function CartPage() {
   const { user } = useAuth();
-  const { cart, totalItems, loading, updateCartItem, removeCartItem, clearCart } = useCart();
+  const { cart, totalItems, loading, fetchCart, updateCartItem, removeCartItem, clearCart } = useCart();
   const navigate = useNavigate();
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState('');
+
+  // Refs để tránh stale closure trong SSE event handlers
+  const fetchCartRef = useRef(fetchCart);
+  useEffect(() => { fetchCartRef.current = fetchCart; }, [fetchCart]);
+  const cartRef = useRef(cart);
+  useEffect(() => { cartRef.current = cart; }, [cart]);
+
+  // SSE: subscribe khi vào trang cart, đóng khi rời trang
+  useEffect(() => {
+    if (!user) return;
+    const es = new EventSource(`${BASE_URL}/api/sse/subscribe`);
+
+    es.addEventListener('product-update', (e: MessageEvent) => {
+      const { productId } = JSON.parse(e.data);
+      if (cartRef.current?.items.some((item) => item.product.id === productId)) {
+        fetchCartRef.current();
+      }
+    });
+
+    es.addEventListener('variant-update', (e: MessageEvent) => {
+      const { variantId } = JSON.parse(e.data);
+      if (cartRef.current?.items.some((item) => item.variantId === variantId)) {
+        fetchCartRef.current();
+      }
+    });
+
+    return () => { es.close(); };
+  }, [user]);
 
   if (!user) {
     return (
