@@ -11,6 +11,9 @@ export const brandApi = {
   getActive: () =>
     apiClient.get<ApiResponse<Brand[]>>('/api/brands/active'),
 
+  getByCategory: (categoryId: number) =>
+    apiClient.get<ApiResponse<Brand[]>>(`/api/brands/category/${categoryId}`),
+
   search: (name: string) =>
     apiClient.get<ApiResponse<Brand[]>>('/api/brands/search', { params: { name } }),
 
