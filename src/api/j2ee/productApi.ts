@@ -141,6 +141,17 @@ export const productMediaApi = {
   getByProduct: (productId: number) =>
     apiClient.get<ApiResponse<ProductMedia[]>>(`/api/products/${productId}/media`),
 
+  upload: (productId: number, files: File[], isPrimary = true) => {
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+    form.append('isPrimary', String(isPrimary));
+    return apiClient.post<ApiResponse<ProductMedia[]>>(
+      `/api/products/${productId}/media/upload`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  },
+
   delete: (productId: number, mediaId: number) =>
     apiClient.delete<ApiResponse<null>>(`/api/products/${productId}/media/${mediaId}`),
 

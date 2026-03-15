@@ -586,7 +586,7 @@ export default function AdminOrders() {
                           <p className="text-xs text-slate-500 truncate">{item.variantOptions.join(' · ')}</p>
                         )}
                         {item.variantSku && (
-                          <p className="text-xs text-slate-400 font-mono">SKU: {item.variantSku}</p>
+                          <p className="text-xs text-slate-400">Tên biến thể: {item.variantSku}</p>
                         )}
                       </div>
                       <div className="text-right shrink-0">
