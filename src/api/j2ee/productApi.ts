@@ -39,6 +39,22 @@ export const productApi = {
   getByPriceRange: (min: number, max: number) =>
     apiClient.get<ApiResponse<Product[]>>('/api/products/price-range', { params: { min, max } }),
 
+  filter: (params: {
+    categoryIds?: number[];
+    brandIds?: number[];
+    minPrice?: number;
+    maxPrice?: number;
+    name?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params.categoryIds) params.categoryIds.forEach((id) => qs.append('categoryIds', String(id)));
+    if (params.brandIds) params.brandIds.forEach((id) => qs.append('brandIds', String(id)));
+    if (params.minPrice != null) qs.set('minPrice', String(params.minPrice));
+    if (params.maxPrice != null) qs.set('maxPrice', String(params.maxPrice));
+    if (params.name) qs.set('name', params.name);
+    return apiClient.get<ApiResponse<Product[]>>(`/api/products/filter?${qs.toString()}`);
+  },
+
   filterBySpec: (attrKey: string, minValue: number, maxValue: number) =>
     apiClient.get<ApiResponse<Product[]>>('/api/products/filter/by-spec', {
       params: { attrKey, minValue, maxValue },
