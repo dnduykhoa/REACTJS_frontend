@@ -4,6 +4,7 @@ import { productApi, brandApi, categoryApi, carouselApi } from '../api/j2ee';
 import type { Product, Brand, Category, CarouselSlide } from '../api/j2ee/types';
 import ProductCard from '../components/ProductCard';
 import { ArrowRight, Zap, Shield, Truck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { dedupeDisplayProducts } from '../utils/productPresentation';
 
 
 function Spinner() {
@@ -79,7 +80,7 @@ export default function HomePage() {
       categoryApi.getRoot(),
       carouselApi.getActive(),
     ]).then(([p, b, c, carousel]) => {
-      setProducts(p.data.data.slice(0, 8));
+      setProducts(dedupeDisplayProducts(p.data.data).slice(0, 8));
       setBrands(b.data.data);
       setCategories(c.data.data);
       setSlides(carousel.data.data || []);

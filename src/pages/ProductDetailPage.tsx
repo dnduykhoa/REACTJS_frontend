@@ -117,7 +117,7 @@ export default function ProductDetailPage() {
       .sort(mediaSort)
       .filter((m) => !variantImages.some((variantMedia) => variantMedia.id === m.id));
 
-    return [...variantImages, ...productImages];
+    return [...productImages, ...variantImages];
   }, [variants, product]);
 
   const selectedVariantImages = useMemo(
@@ -139,6 +139,11 @@ export default function ProductDetailPage() {
   }, [variants, selectedOptions]);
 
   const filteredGalleryImages = useMemo(() => {
+    const hasActiveSelections = Object.values(selectedOptions).some((value) => Boolean(value));
+    if (!hasActiveSelections) {
+      return allGalleryImages;
+    }
+
     const variantImages = matchingVariants.flatMap((variant) =>
       [...(variant.media || [])]
         .filter((media) => media.mediaType === 'IMAGE')
@@ -154,7 +159,7 @@ export default function ProductDetailPage() {
     }
 
     return allGalleryImages;
-  }, [allGalleryImages, matchingVariants]);
+  }, [allGalleryImages, matchingVariants, selectedOptions]);
 
   useEffect(() => {
     const productId = extractProductIdFromSlug(slug);
@@ -185,20 +190,8 @@ export default function ProductDetailPage() {
 
         const variantList = variantRes?.data?.data || [];
         setVariants(variantList);
-
-        if (variantList.length > 0) {
-          const firstVariant = variantList[0];
-          setSelectedVariant(firstVariant);
-
-          const defaultSelections: Record<string, string> = {};
-          firstVariant.values.forEach((value) => {
-            const comparable = getVariantComparableValue(value);
-            if (value.attrKey && comparable) {
-              defaultSelections[value.attrKey] = comparable;
-            }
-          });
-          setSelectedOptions(defaultSelections);
-        }
+        setSelectedVariant(null);
+        setSelectedOptions({});
       })
       .catch(() => setError('Không tìm thấy sản phẩm'))
       .finally(() => setLoading(false));
@@ -206,6 +199,12 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     if (variants.length === 0) return;
+
+    const hasActiveSelections = Object.values(selectedOptions).some((value) => Boolean(value));
+    if (!hasActiveSelections) {
+      setSelectedVariant(null);
+      return;
+    }
 
     const next = variants.find((variant) =>
       Object.entries(selectedOptions).every(([key, value]) =>
@@ -341,6 +340,7 @@ export default function ProductDetailPage() {
   const optionDisplayMap: Record<string, Record<string, string>> = {};
   const optionDisplayMapLower: Record<string, Record<string, string>> = {};
   const variantOptionDefIdToKeyLower = new Map<number, string>();
+  const optionKeyByLower: Record<string, string> = {};
   for (const variant of variants) {
     for (const value of variant.values || []) {
       const key = value.attrKey;
@@ -364,6 +364,9 @@ export default function ProductDetailPage() {
       if (normalizedKey) {
         if (!optionDisplayMapLower[normalizedKey]) optionDisplayMapLower[normalizedKey] = {};
         optionDisplayMapLower[normalizedKey][optionValue] = optionDisplayMap[key][optionValue];
+        if (!optionKeyByLower[normalizedKey]) {
+          optionKeyByLower[normalizedKey] = key;
+        }
       }
 
       const defId = value.attributeDefinition?.id;
@@ -375,11 +378,52 @@ export default function ProductDetailPage() {
       if (defAttrKey) {
         if (!optionDisplayMapLower[defAttrKey]) optionDisplayMapLower[defAttrKey] = {};
         optionDisplayMapLower[defAttrKey][optionValue] = optionDisplayMap[key][optionValue];
+        if (!optionKeyByLower[defAttrKey]) {
+          optionKeyByLower[defAttrKey] = key;
+        }
         if (defId != null && !variantOptionDefIdToKeyLower.has(defId)) {
           variantOptionDefIdToKeyLower.set(defId, defAttrKey);
         }
       }
     }
+  }
+
+  const parentOptionValues: Record<string, string> = {};
+  for (const spec of specs) {
+    const rawParentValue = spec.specValue != null && spec.specValue.trim() !== ''
+      ? spec.specValue.trim()
+      : spec.valueNumber != null
+        ? String(spec.valueNumber)
+        : '';
+    if (!rawParentValue) continue;
+
+    const byDefId = spec.attributeDefinition?.id != null
+      ? variantOptionDefIdToKeyLower.get(spec.attributeDefinition.id)
+      : undefined;
+    const byAttrKey = spec.attributeDefinition?.attrKey?.trim().toLowerCase() || undefined;
+    const bySpecKey = spec.specKey?.trim().toLowerCase() || undefined;
+
+    const normalizedOptionKey = byDefId || byAttrKey || bySpecKey;
+    if (!normalizedOptionKey) continue;
+
+    const optionKey = optionKeyByLower[normalizedOptionKey];
+    if (!optionKey) continue;
+
+    if (!optionMap[optionKey]) optionMap[optionKey] = [];
+    if (!optionMap[optionKey].includes(rawParentValue)) {
+      optionMap[optionKey].push(rawParentValue);
+    }
+
+    if (!optionDisplayMap[optionKey]) optionDisplayMap[optionKey] = {};
+    optionDisplayMap[optionKey][rawParentValue] = formatVariantOptionValue(
+      rawParentValue,
+      spec.attributeDefinition?.dataType,
+      spec.attributeDefinition?.unit
+    );
+
+    if (!optionDisplayMapLower[normalizedOptionKey]) optionDisplayMapLower[normalizedOptionKey] = {};
+    optionDisplayMapLower[normalizedOptionKey][rawParentValue] = optionDisplayMap[optionKey][rawParentValue];
+    parentOptionValues[optionKey] = rawParentValue;
   }
 
   const selectedOptionsByKeyLower = new Map<string, string>();
@@ -390,15 +434,34 @@ export default function ProductDetailPage() {
   }
   const hasVariants = variants.length > 0;
   const requiredOptionKeys = Object.keys(optionMap);
+  const hasActiveSelections = Object.values(selectedOptions).some((value) => Boolean(value));
   const isSelectionComplete = !hasVariants || requiredOptionKeys.every((key) => Boolean(selectedOptions[key]));
+  const isParentSelectionMatch = hasActiveSelections && requiredOptionKeys.every((key) => {
+    const selected = selectedOptions[key];
+    if (!selected) return true;
+    return parentOptionValues[key] === selected;
+  });
 
   const variantHasOption = (variant: ProductVariant, key: string, value: string) =>
     (variant.values || []).some(
       (variantValue) => variantValue.attrKey === key && getVariantComparableValue(variantValue) === value
     );
 
+  const parentMatchesSelection = (selection: Record<string, string>) => {
+    const entries = Object.entries(selection).filter(([, value]) => Boolean(value));
+    if (entries.length === 0) return true;
+    return entries.every(([key, value]) => parentOptionValues[key] === value);
+  };
+
   const isOptionAvailable = (optionKey: string, optionValue: string) => {
-    return variants.some((variant) => {
+    const candidateSelection: Record<string, string> = {};
+    for (const [selectedKey, selectedValue] of Object.entries(selectedOptions)) {
+      if (!selectedValue || selectedKey === optionKey) continue;
+      candidateSelection[selectedKey] = selectedValue;
+    }
+    candidateSelection[optionKey] = optionValue;
+
+    const hasVariantMatch = variants.some((variant) => {
       if (!variantHasOption(variant, optionKey, optionValue)) return false;
       for (const [selectedKey, selectedValue] of Object.entries(selectedOptions)) {
         if (!selectedValue || selectedKey === optionKey) continue;
@@ -406,14 +469,17 @@ export default function ProductDetailPage() {
       }
       return true;
     });
+
+    return hasVariantMatch || parentMatchesSelection(candidateSelection);
   };
 
   const isSelectionValid = (selection: Record<string, string>) => {
     const entries = Object.entries(selection).filter(([, value]) => Boolean(value));
     if (entries.length === 0) return true;
-    return variants.some((variant) =>
+    const hasVariantMatch = variants.some((variant) =>
       entries.every(([key, value]) => variantHasOption(variant, key, value))
     );
+    return hasVariantMatch || parentMatchesSelection(selection);
   };
 
   const handleOptionSelect = (optionKey: string, optionValue: string) => {
@@ -538,10 +604,11 @@ export default function ProductDetailPage() {
   }
 
   const isDiscontinued = product.status === 'INACTIVE' || (!product.isActive && product.status !== 'OUT_OF_STOCK');
+  const displayProductName = selectedVariant?.sku?.trim() ? selectedVariant.sku : product.name;
   const currentPrice = selectedVariant?.price ?? product.price;
   const currentStock = selectedVariant?.stockQuantity ?? product.stockQuantity;
   const inStock = !isDiscontinued && currentStock > 0;
-  const canAddToCart = inStock && !isDiscontinued && (!hasVariants || (isSelectionComplete && !!selectedVariant));
+  const canAddToCart = inStock && !isDiscontinued && (!hasActiveSelections || !!selectedVariant || isParentSelectionMatch);
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -551,8 +618,8 @@ export default function ProductDetailPage() {
     try {
       setAddingToCart(true);
       setCartMsg(null);
-      if (hasVariants && (!isSelectionComplete || !selectedVariant)) {
-        setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+      if (hasVariants && hasActiveSelections && !selectedVariant && !isParentSelectionMatch) {
+        setCartMsg({ type: 'error', text: 'Tổ hợp biến thể đã chọn hiện không khả dụng' });
         return;
       }
       await addToCart(product.id, qty, selectedVariant?.id);
@@ -574,8 +641,8 @@ export default function ProductDetailPage() {
       navigate('/login');
       return;
     }
-    if (hasVariants && (!isSelectionComplete || !selectedVariant)) {
-      setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+    if (hasVariants && hasActiveSelections && !selectedVariant && !isParentSelectionMatch) {
+      setCartMsg({ type: 'error', text: 'Tổ hợp biến thể đã chọn hiện không khả dụng' });
       return;
     }
     // Không thêm vào giỏ hàng, truyền thẳng sang checkout qua router state
@@ -585,7 +652,7 @@ export default function ProductDetailPage() {
           productId: product.id,
           variantId: selectedVariant?.id,
           qty,
-          productName: product.name,
+          productName: displayProductName,
           unitPrice: currentPrice,
           media: product.media,
         },
@@ -601,7 +668,7 @@ export default function ProductDetailPage() {
         <ChevronRight className="w-3.5 h-3.5" />
         <Link to="/products" className="hover:text-indigo-600 transition-colors">Sản phẩm</Link>
         <ChevronRight className="w-3.5 h-3.5" />
-        <span className="text-slate-700 font-medium truncate max-w-xs">{product.name}</span>
+        <span className="text-slate-700 font-medium truncate max-w-xs">{displayProductName}</span>
       </nav>
 
       {/* Main card */}
@@ -708,7 +775,7 @@ export default function ProductDetailPage() {
               {product.brand.name}
             </span>
           )}
-          <h1 className="text-2xl font-extrabold text-slate-800 leading-snug">{product.name}</h1>
+          <h1 className="text-2xl font-extrabold text-slate-800 leading-snug">{displayProductName}</h1>
 
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-extrabold text-[#e60012]">
@@ -745,12 +812,12 @@ export default function ProductDetailPage() {
                 </div>
               ))}
 
-              {hasVariants && !selectedVariant && (
+              {hasVariants && hasActiveSelections && !selectedVariant && !isParentSelectionMatch && (
                 <p className="text-xs text-rose-500">Tổ hợp lựa chọn hiện tại chưa có hàng.</p>
               )}
 
-              {hasVariants && !isSelectionComplete && (
-                <p className="text-xs text-amber-600">Vui lòng chọn đủ tất cả thuộc tính để tiếp tục mua hàng.</p>
+              {hasVariants && !isSelectionComplete && !hasActiveSelections && (
+                <p className="text-xs text-slate-500">Bạn có thể mua sản phẩm cha hoặc chọn thêm thuộc tính biến thể.</p>
               )}
             </div>
           )}

@@ -4,6 +4,7 @@ import { productApi, brandApi, categoryApi } from '../api/j2ee';
 import type { Product, Brand, Category } from '../api/j2ee/types';
 import ProductCard from '../components/ProductCard';
 import { Search, SlidersHorizontal, X, Check } from 'lucide-react';
+import { dedupeDisplayProducts } from '../utils/productPresentation';
 
 const PRICE_RANGES: { label: string; min: number | null; max: number | null }[] = [
   { label: 'Dưới 500k', min: null, max: 500000 },
@@ -103,7 +104,7 @@ export default function ProductsPage() {
         maxPrice: maxP,
         name: name || undefined,
       });
-      setProducts(res.data.data);
+      setProducts(dedupeDisplayProducts(res.data.data));
     };
 
     run().finally(() => setLoading(false));

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi, productVariantApi } from '../../api/j2ee';
+import { productApi, categoryApi, brandApi, productSpecApi, categoryAttributeApi, productVariantApi, productMediaApi } from '../../api/j2ee';
 import type { Product, Category, Brand, ProductMedia, ProductSpecification, CategoryAttribute, ProductVariant } from '../../api/j2ee/types';
 import { ArrowLeft, AlertCircle, Trash2, Plus, ChevronDown } from 'lucide-react';
 
@@ -8,6 +8,7 @@ const inputClass = 'w-full border border-slate-200 rounded-xl px-4 py-2.5 text-s
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
+const MEDIA_UPLOAD_CHUNK_SIZE = 4;
 
 type VariantDraft = {
   tempId: string;
@@ -146,16 +147,12 @@ export default function AdminProductForm() {
             const catAttrs = caRes.data.data;
             setCategoryAttributes(catAttrs);
 
-            const defaultAttrIds = catAttrs
-              .map((ca: CategoryAttribute) => ca.attributeDefinition.id)
-              .filter((idValue: number, index: number, arr: number[]) => arr.indexOf(idValue) === index);
-
             const usedVariantAttrIds = variants
               .flatMap((variant) => (variant.values || []).map((value) => value.attributeDefinition?.id))
               .filter((idValue): idValue is number => idValue != null)
               .filter((idValue, index, arr) => arr.indexOf(idValue) === index);
 
-            const initialVariantAttrIds = usedVariantAttrIds.length > 0 ? usedVariantAttrIds : defaultAttrIds;
+            const initialVariantAttrIds = usedVariantAttrIds;
             setVariantAttrDraftIds(initialVariantAttrIds);
             setVariantAttrIds(initialVariantAttrIds);
 
@@ -199,11 +196,8 @@ export default function AdminProductForm() {
       categoryAttributeApi.getByCategory(catId).then((res) => {
         const nextAttributes: CategoryAttribute[] = res.data.data;
         setCategoryAttributes(nextAttributes);
-        const defaultAttrIds = nextAttributes
-          .map((ca) => ca.attributeDefinition.id)
-          .filter((idValue, index, arr) => arr.indexOf(idValue) === index);
-        setVariantAttrDraftIds(defaultAttrIds);
-        setVariantAttrIds(defaultAttrIds);
+        setVariantAttrDraftIds([]);
+        setVariantAttrIds([]);
         // Reset values, keeping only those that match the new category's attributes
         setAttrValues({});
         setAttrSpecIds({});
@@ -244,29 +238,17 @@ export default function AdminProductForm() {
       );
 
       if (!isVariantEdit && variantRows.length > 0 && normalizedVariantRows.length === 0) {
-        throw new Error('Vui lòng nhập ít nhất 1 biến thể hợp lệ (SKU và giá > 0)');
+        throw new Error('Vui lòng nhập ít nhất 1 biến thể hợp lệ (tên biến thể và giá > 0)');
       }
-
-      const parentPrice = normalizedVariantRows.length > 0
-        ? Math.min(...normalizedVariantRows.map((row) => Number(row.price)))
-        : Number(form.price);
-
-      const parentStockQuantity = normalizedVariantRows.length > 0
-        ? normalizedVariantRows.reduce((sum, row) => {
-          const stock = Number(row.stockQuantity || '0');
-          return sum + (Number.isNaN(stock) ? 0 : Math.max(0, stock));
-        }, 0)
-        : Number(form.stockQuantity);
 
       const params = {
         name: form.name,
         description: form.description || undefined,
-        price: parentPrice,
-        stockQuantity: parentStockQuantity,
+        price: Number(form.price),
+        stockQuantity: Number(form.stockQuantity),
         categoryId: form.categoryId ? Number(form.categoryId) : undefined,
         brandId: form.brandId ? Number(form.brandId) : undefined,
         isActive: form.isActive,
-        files,
         deleteMediaIds,
       };
 
@@ -281,9 +263,16 @@ export default function AdminProductForm() {
         productId = createRes.data.data.id;
       }
 
+      if (!isVariantEdit && files.length > 0) {
+        for (let i = 0; i < files.length; i += MEDIA_UPLOAD_CHUNK_SIZE) {
+          const chunk = files.slice(i, i + MEDIA_UPLOAD_CHUNK_SIZE);
+          await productMediaApi.upload(productId, chunk, true);
+        }
+      }
+
       // Save category attribute values as product specifications
       if (!isVariantEdit) {
-        for (const ca of categoryAttributes.filter((ca) => !variantAttrIds.includes(ca.attributeDefinition.id))) {
+        for (const ca of categoryAttributes) {
           const def = ca.attributeDefinition;
           const val = (attrValues[def.id] ?? '').trim();
           const existingSpecId = attrSpecIds[def.id];
@@ -386,7 +375,10 @@ export default function AdminProductForm() {
 
         const filesForVariant = variantFiles[row.tempId] || [];
         if (filesForVariant.length > 0) {
-          await productVariantApi.uploadMedia(productId, savedVariantId, filesForVariant, true);
+          for (let i = 0; i < filesForVariant.length; i += MEDIA_UPLOAD_CHUNK_SIZE) {
+            const chunk = filesForVariant.slice(i, i + MEDIA_UPLOAD_CHUNK_SIZE);
+            await productVariantApi.uploadMedia(productId, savedVariantId, chunk, true);
+          }
         }
       }
 
@@ -402,7 +394,7 @@ export default function AdminProductForm() {
     } catch (err: unknown) {
       setError(
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-          'Lưu thất bại'
+        'Lưu thất bại'
       );
     } finally {
       setSaving(false);
@@ -479,26 +471,6 @@ export default function AdminProductForm() {
     .slice()
     .sort((a, b) => a.displayOrder - b.displayOrder);
 
-  const nonVariantCategoryAttrs = categoryAttributes
-    .filter((ca) => !variantAttrIds.includes(ca.attributeDefinition.id))
-    .sort((a, b) => a.displayOrder - b.displayOrder);
-
-  const variantRowsForParentPricing = useMemo(
-    () => variantRows.filter((row) => row.sku.trim() !== '' && Number(row.price) > 0),
-    [variantRows]
-  );
-
-  const shouldAutoFillParentPricing = !isVariantEdit && variantRows.length > 0;
-
-  const autoParentPrice = variantRowsForParentPricing.length > 0
-    ? Math.min(...variantRowsForParentPricing.map((row) => Number(row.price)))
-    : null;
-
-  const autoParentStock = variantRowsForParentPricing.reduce((sum, row) => {
-    const stock = Number(row.stockQuantity || '0');
-    return sum + (Number.isNaN(stock) ? 0 : Math.max(0, stock));
-  }, 0);
-
   const handleAddSpec = async () => {
     if (!id) return;
     if (!newSpec.specKey && !newSpec.specValue) return;
@@ -549,8 +521,8 @@ export default function AdminProductForm() {
             {isVariantEdit
               ? 'Chỉnh sửa biến thể sản phẩm'
               : isEdit
-              ? 'Chỉnh sửa sản phẩm'
-              : 'Thêm sản phẩm mới'}
+                ? 'Chỉnh sửa sản phẩm'
+                : 'Thêm sản phẩm mới'}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {isVariantEdit ? 'Thông tin sản phẩm cha chỉ xem. Chỉ có thể chỉnh sửa thông tin biến thể bên dưới.' : 'Danh sách sản phẩm'}
@@ -576,88 +548,202 @@ export default function AdminProductForm() {
           )}
 
           <fieldset disabled={isVariantEdit} className={isVariantEdit ? 'space-y-4 opacity-60' : 'space-y-4'}>
-          <div>
-            <label className={labelClass}>Tên sản phẩm <span className="text-rose-500">*</span></label>
-            <input type="text" required value={form.name} onChange={set('name')} className={inputClass} placeholder="Nhập tên sản phẩm" />
-          </div>
-
-          <div>
-            <label className={labelClass}>Mô tả</label>
-            <textarea
-              rows={5}
-              value={form.description}
-              onChange={set('description')}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                const target = e.currentTarget;
-                const start = target.selectionStart;
-                const end = target.selectionEnd;
-                const nextValue = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
-                setForm((prev) => ({ ...prev, description: nextValue }));
-                requestAnimationFrame(() => {
-                  target.selectionStart = target.selectionEnd = start + 1;
-                });
-              }}
-              className={inputClass}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Danh mục</label>
-              <select value={form.categoryId} onChange={handleCategoryChange} className={inputClass}>
-                <option value="">-- Chọn danh mục --</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <label className={labelClass}>Tên sản phẩm <span className="text-rose-500">*</span></label>
+              <input type="text" required value={form.name} onChange={set('name')} className={inputClass} placeholder="Nhập tên sản phẩm" />
             </div>
-            <div>
-              <label className={labelClass}>Thương hiệu</label>
-              <select value={form.brandId} onChange={set('brandId')} className={inputClass}>
-                <option value="">-- Chọn thương hiệu --</option>
-                {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Giá (VNĐ) <span className="text-rose-500">*</span></label>
-              <input
-                type="number"
-                required={!shouldAutoFillParentPricing}
-                min={0}
-                value={shouldAutoFillParentPricing ? (autoParentPrice != null ? String(autoParentPrice) : '') : form.price}
-                onChange={set('price')}
-                disabled={shouldAutoFillParentPricing}
+              <label className={labelClass}>Mô tả</label>
+              <textarea
+                rows={5}
+                value={form.description}
+                onChange={set('description')}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const start = target.selectionStart;
+                  const end = target.selectionEnd;
+                  const nextValue = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
+                  setForm((prev) => ({ ...prev, description: nextValue }));
+                  requestAnimationFrame(() => {
+                    target.selectionStart = target.selectionEnd = start + 1;
+                  });
+                }}
                 className={inputClass}
               />
             </div>
-            <div>
-              <label className={labelClass}>Số lượng kho <span className="text-rose-500">*</span></label>
-              <input
-                type="number"
-                required={!shouldAutoFillParentPricing}
-                min={0}
-                value={shouldAutoFillParentPricing ? String(autoParentStock) : form.stockQuantity}
-                onChange={handleStockQuantityChange}
-                disabled={shouldAutoFillParentPricing}
-                className={inputClass}
-              />
-              {shouldAutoFillParentPricing && (
-                <p className="text-xs text-slate-500 mt-1">
-                  Tự động theo biến thể: giá thấp nhất và tổng tồn kho.
-                </p>
-              )}
-            </div>
-          </div>
 
-          <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-            <span className="text-sm text-slate-700">Hiển thị sản phẩm</span>
-          </label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Danh mục</label>
+                <select value={form.categoryId} onChange={handleCategoryChange} className={inputClass}>
+                  <option value="">-- Chọn danh mục --</option>
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Thương hiệu</label>
+                <select value={form.brandId} onChange={set('brandId')} className={inputClass}>
+                  <option value="">-- Chọn thương hiệu --</option>
+                  {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Giá (VNĐ) <span className="text-rose-500">*</span></label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={form.price}
+                  onChange={set('price')}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Số lượng kho <span className="text-rose-500">*</span></label>
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={form.stockQuantity}
+                  onChange={handleStockQuantityChange}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+              <span className="text-sm text-slate-700">Hiển thị sản phẩm</span>
+            </label>
           </fieldset>
         </div>
+
+        {/* Category Attributes */}
+        {sortedCategoryAttributes.length > 0 && !isVariantEdit && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+            <div>
+              <h2 className="font-semibold text-slate-800">Thuộc tính sản phẩm</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Hiển thị đầy đủ tất cả thuộc tính theo danh mục đã chọn</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {sortedCategoryAttributes.map((ca) => {
+                const def = ca.attributeDefinition;
+                const val = attrValues[def.id] ?? '';
+                const setVal = (v: string) =>
+                  setAttrValues((prev) => ({ ...prev, [def.id]: v }));
+                const fieldLabel = `${def.name}${def.unit ? ` (${def.unit})` : ''}`;
+                return (
+                  <div key={ca.id}>
+                    <label className={labelClass}>
+                      {fieldLabel}
+                      {ca.isRequired && <span className="text-rose-500 ml-0.5">*</span>}
+                      {def.attributeGroup && (
+                        <span className="ml-1.5 text-xs text-slate-400 font-normal">
+                          — {def.attributeGroup.name}
+                        </span>
+                      )}
+                    </label>
+                    {def.dataType === 'BOOLEAN' ? (
+                      <select
+                        value={val}
+                        onChange={(e) => setVal(e.target.value)}
+                        required={ca.isRequired}
+                        className={inputClass}
+                      >
+                        <option value="">-- Chọn --</option>
+                        <option value="true">Có</option>
+                        <option value="false">Không</option>
+                      </select>
+                    ) : def.dataType === 'NUMBER' ? (
+                      <input
+                        type="number"
+                        value={val}
+                        onChange={(e) => setVal(e.target.value)}
+                        required={ca.isRequired}
+                        placeholder={`Nhập${def.unit ? ' ' + def.unit : ''}`}
+                        className={inputClass}
+                      />
+                    ) : (
+                      <textarea
+                        rows={1}
+                        value={val}
+                        onChange={(e) => {
+                          setVal(e.target.value);
+                          const el = e.target;
+                          el.style.height = 'auto';
+                          el.style.height = `${el.scrollHeight}px`;
+                        }}
+                        onFocus={(e) => {
+                          const el = e.target;
+                          el.style.height = 'auto';
+                          el.style.height = `${el.scrollHeight}px`;
+                        }}
+                        required={ca.isRequired}
+                        placeholder={`Nhập ${def.name.toLowerCase()}`}
+                        className={`${inputClass} resize-none overflow-hidden`}
+                        style={{ minHeight: '2.625rem' }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Media */}
+        {!isVariantEdit && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+            <h2 className="font-semibold text-slate-800">Hình ảnh / Video</h2>
+
+            {existingMedia.length > 0 && (
+              <div>
+                <p className="text-xs text-slate-500 mb-2">Ảnh hiện tại (tick để xóa):</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {existingMedia.map((m) => (
+                    <div key={m.id} className="relative">
+                      <img
+                        src={resolveUrl(m.mediaUrl)}
+                        alt=""
+                        className={`w-20 h-20 object-cover rounded-xl border-2 transition ${deleteMediaIds.includes(m.id) ? 'border-rose-400 opacity-50' : 'border-slate-200'
+                          }`}
+                      />
+                      <input
+                        type="checkbox"
+                        checked={deleteMediaIds.includes(m.id)}
+                        onChange={() => toggleDeleteMedia(m.id)}
+                        className="absolute top-1 right-1"
+                        title="Xóa ảnh này"
+                      />
+                      {m.isPrimary && (
+                        <span className="absolute bottom-0 left-0 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded-br-xl rounded-tl-none rounded-tr-none">
+                          Chính
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className={labelClass}>Upload ảnh / video mới</label>
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-300`}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Variants */}
         {categoryAttributes.length > 0 && (
@@ -668,7 +754,7 @@ export default function AdminProductForm() {
                 <p className="text-xs text-slate-500 mt-0.5">
                   {isVariantEdit
                     ? 'Bạn đang chỉnh sửa riêng một biến thể, các biến thể khác sẽ được giữ nguyên.'
-                    : 'Mỗi biến thể có SKU, giá, tồn kho và các lựa chọn riêng'}
+                    : 'Mỗi biến thể có tên, giá, tồn kho và các lựa chọn riêng'}
                 </p>
               </div>
               {!isVariantEdit && (
@@ -778,12 +864,12 @@ export default function AdminProductForm() {
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div>
-                        <label className={labelClass}>SKU</label>
+                        <label className={labelClass}>Tên biến thể</label>
                         <input
                           value={row.sku}
                           onChange={(e) => updateVariantRow(row.tempId, { sku: e.target.value })}
                           className={inputClass}
-                          placeholder="IP15-128-DB"
+                          placeholder="Ví dụ: iPhone 15 - 128GB - Đen"
                         />
                       </div>
                       <div>
@@ -897,11 +983,10 @@ export default function AdminProductForm() {
                                 <img
                                   src={resolveUrl(m.mediaUrl)}
                                   alt=""
-                                  className={`w-16 h-16 object-cover rounded-lg border-2 transition ${
-                                    (variantDeleteMediaIds[row.tempId] || []).includes(m.id)
+                                  className={`w-16 h-16 object-cover rounded-lg border-2 transition ${(variantDeleteMediaIds[row.tempId] || []).includes(m.id)
                                       ? 'border-rose-400 opacity-50'
                                       : 'border-slate-200'
-                                  }`}
+                                    }`}
                                 />
                                 <input
                                   type="checkbox"
@@ -941,128 +1026,6 @@ export default function AdminProductForm() {
               </div>
             )}
           </div>
-        )}
-
-        {/* Category Attributes */}
-        {nonVariantCategoryAttrs.length > 0 && !isVariantEdit && (
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
-            <div>
-              <h2 className="font-semibold text-slate-800">Thuộc tính sản phẩm</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Các thuộc tính không phải biến thể theo danh mục đã chọn</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {nonVariantCategoryAttrs.map((ca) => {
-                  const def = ca.attributeDefinition;
-                  const val = attrValues[def.id] ?? '';
-                  const setVal = (v: string) =>
-                    setAttrValues((prev) => ({ ...prev, [def.id]: v }));
-                  const fieldLabel = `${def.name}${def.unit ? ` (${def.unit})` : ''}`;
-                  return (
-                    <div key={ca.id}>
-                      <label className={labelClass}>
-                        {fieldLabel}
-                        {ca.isRequired && <span className="text-rose-500 ml-0.5">*</span>}
-                        {def.attributeGroup && (
-                          <span className="ml-1.5 text-xs text-slate-400 font-normal">
-                            — {def.attributeGroup.name}
-                          </span>
-                        )}
-                      </label>
-                      {def.dataType === 'BOOLEAN' ? (
-                        <select
-                          value={val}
-                          onChange={(e) => setVal(e.target.value)}
-                          required={ca.isRequired}
-                          className={inputClass}
-                        >
-                          <option value="">-- Chọn --</option>
-                          <option value="true">Có</option>
-                          <option value="false">Không</option>
-                        </select>
-                      ) : def.dataType === 'NUMBER' ? (
-                        <input
-                          type="number"
-                          value={val}
-                          onChange={(e) => setVal(e.target.value)}
-                          required={ca.isRequired}
-                          placeholder={`Nhập${def.unit ? ' ' + def.unit : ''}`}
-                          className={inputClass}
-                        />
-                      ) : (
-                        <textarea
-                          rows={1}
-                          value={val}
-                          onChange={(e) => {
-                            setVal(e.target.value);
-                            const el = e.target;
-                            el.style.height = 'auto';
-                            el.style.height = `${el.scrollHeight}px`;
-                          }}
-                          onFocus={(e) => {
-                            const el = e.target;
-                            el.style.height = 'auto';
-                            el.style.height = `${el.scrollHeight}px`;
-                          }}
-                          required={ca.isRequired}
-                          placeholder={`Nhập ${def.name.toLowerCase()}`}
-                          className={`${inputClass} resize-none overflow-hidden`}
-                          style={{ minHeight: '2.625rem' }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        )}
-
-        {/* Media */}
-        {!isVariantEdit && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
-          <h2 className="font-semibold text-slate-800">Hình ảnh / Video</h2>
-
-          {existingMedia.length > 0 && (
-            <div>
-              <p className="text-xs text-slate-500 mb-2">Ảnh hiện tại (tick để xóa):</p>
-              <div className="flex flex-wrap items-center gap-2">
-                {existingMedia.map((m) => (
-                  <div key={m.id} className="relative">
-                    <img
-                      src={resolveUrl(m.mediaUrl)}
-                      alt=""
-                      className={`w-20 h-20 object-cover rounded-xl border-2 transition ${
-                        deleteMediaIds.includes(m.id) ? 'border-rose-400 opacity-50' : 'border-slate-200'
-                      }`}
-                    />
-                    <input
-                      type="checkbox"
-                      checked={deleteMediaIds.includes(m.id)}
-                      onChange={() => toggleDeleteMedia(m.id)}
-                      className="absolute top-1 right-1"
-                      title="Xóa ảnh này"
-                    />
-                    {m.isPrimary && (
-                      <span className="absolute bottom-0 left-0 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded-br-xl rounded-tl-none rounded-tr-none">
-                        Chính
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className={labelClass}>Upload ảnh / video mới</label>
-            <input
-              type="file"
-              multiple
-              accept="image/*,video/*"
-              onChange={(e) => setFiles(Array.from(e.target.files || []))}
-              className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-300`}
-            />
-          </div>
-        </div>
         )}
 
         {/* Specs (edit mode only) */}

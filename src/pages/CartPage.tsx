@@ -287,7 +287,7 @@ export default function CartPage() {
                 <div key={item.id} className="flex justify-between">
                   <span className={`truncate max-w-[60%] ${
                     isUnavailable(item) ? 'text-slate-400 line-through' : 'text-slate-500'
-                  }`}>{item.product.name}{item.variantSku ? ` (${item.variantSku})` : ''} × {item.quantity}</span>
+                  }`}>{item.product.name}{item.variantSku ? ` (Biến thể: ${item.variantSku})` : ''} × {item.quantity}</span>
                   {getItemStatus(item) === 'inactive' ? (
                     <span className="text-xs font-semibold text-slate-500">Ngưng bán</span>
                   ) : getItemStatus(item) === 'out_of_stock' ? (
