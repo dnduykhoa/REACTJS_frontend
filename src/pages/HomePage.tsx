@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { productApi, brandApi, categoryApi, carouselApi } from '../api/j2ee';
-import type { Product, Brand, Category, CarouselSlide } from '../api/j2ee/types';
+import type { Brand, Category, CarouselSlide } from '../api/j2ee/types';
 import ProductCard from '../components/ProductCard';
 import { ArrowRight, Zap, Shield, Truck, ChevronLeft, ChevronRight } from 'lucide-react';
-import { dedupeDisplayProducts } from '../utils/productPresentation';
+import { dedupeDisplayProducts, type ProductWithDisplayHint } from '../utils/productPresentation';
 
 
 function Spinner() {
@@ -16,7 +16,7 @@ function Spinner() {
 }
 
 export default function HomePage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductWithDisplayHint[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [slides, setSlides] = useState<CarouselSlide[]>([]);

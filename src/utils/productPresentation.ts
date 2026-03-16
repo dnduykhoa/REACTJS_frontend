@@ -1,5 +1,7 @@
 import type { Product, ProductStatus, ProductVariant } from '../api/j2ee/types';
 
+export type ProductWithDisplayHint = Product & { _displayVariantId?: number };
+
 function normalizeText(value: string | null | undefined): string {
   return (value || '').trim().toLowerCase();
 }
@@ -38,7 +40,7 @@ function pickNearestAvailableVariant(product: Product): ProductVariant | null {
   return variants.find(isVariantAvailable) || null;
 }
 
-function toDisplayProduct(product: Product): Product {
+function toDisplayProduct(product: Product): ProductWithDisplayHint {
   if (resolveProductStatus(product) === 'ACTIVE') return product;
 
   const fallbackVariant = pickNearestAvailableVariant(product);
@@ -52,11 +54,12 @@ function toDisplayProduct(product: Product): Product {
     media: fallbackVariant.media?.length ? fallbackVariant.media : product.media,
     isActive: true,
     status: 'ACTIVE',
+    _displayVariantId: fallbackVariant.id,
   };
 }
 
-export function dedupeDisplayProducts(products: Product[]): Product[] {
-  if (!products || products.length <= 1) return products;
+export function dedupeDisplayProducts(products: Product[]): ProductWithDisplayHint[] {
+  if (!products || products.length === 0) return [];
 
   const byKey = new Map<string, Product>();
   for (const product of products) {

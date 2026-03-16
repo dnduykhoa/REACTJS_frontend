@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { productApi, brandApi, categoryApi } from '../api/j2ee';
-import type { Product, Brand, Category } from '../api/j2ee/types';
+import type { Brand, Category } from '../api/j2ee/types';
 import ProductCard from '../components/ProductCard';
 import { Search, SlidersHorizontal, X, Check } from 'lucide-react';
-import { dedupeDisplayProducts } from '../utils/productPresentation';
+import { dedupeDisplayProducts, type ProductWithDisplayHint } from '../utils/productPresentation';
 
 const PRICE_RANGES: { label: string; min: number | null; max: number | null }[] = [
   { label: 'Dưới 500k', min: null, max: 500000 },
@@ -24,7 +24,7 @@ function Spinner() {
 
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductWithDisplayHint[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [rootCategories, setRootCategories] = useState<Category[]>([]);
   const [childCategories, setChildCategories] = useState<Category[]>([]);
