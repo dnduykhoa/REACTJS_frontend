@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { productApi, productVariantApi } from '../api/j2ee';
 import type { Product, ProductMedia, ProductStatus, ProductVariant } from '../api/j2ee/types';
 import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
@@ -80,6 +80,8 @@ function resolveProductStatus(product: Product): ProductStatus {
 export default function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const displayVariantId: number | null = (location.state as { displayVariantId?: number | null } | null)?.displayVariantId ?? null;
   const { user } = useAuth();
   const { addToCart } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
@@ -195,11 +197,58 @@ export default function ProductDetailPage() {
         const variantList = variantRes?.data?.data || [];
         setVariants(variantList);
         setSelectedVariant(null);
-        setSelectedOptions({});
+
+        if (variantList.length > 0) {
+          if (displayVariantId != null) {
+            // Came from a variant-substituted card → select that specific variant
+            const targetVariant =
+              variantList.find((v: ProductVariant) => v.id === displayVariantId) ||
+              variantList.find((v: ProductVariant) => v.isActive && (v.stockQuantity ?? 0) > 0) ||
+              variantList[0];
+            const autoOptions: Record<string, string> = {};
+            for (const value of targetVariant.values || []) {
+              const key = value.attrKey;
+              const val = getVariantComparableValue(value);
+              if (key && val) autoOptions[key] = val;
+            }
+            setSelectedOptions(Object.keys(autoOptions).length > 0 ? autoOptions : {});
+          } else {
+            // Came from a parent-showing card → try to match parent's specs to variant dimensions
+            const keyByLower = new Map<string, string>();
+            for (const v of variantList) {
+              for (const val of (v.values || [])) {
+                if (!val.attrKey) continue;
+                const normalized = val.attrKey.trim().toLowerCase();
+                if (!keyByLower.has(normalized)) keyByLower.set(normalized, val.attrKey);
+                const defKey = val.attributeDefinition?.attrKey?.trim().toLowerCase();
+                if (defKey && !keyByLower.has(defKey)) keyByLower.set(defKey, val.attrKey);
+              }
+            }
+            const parentOptions: Record<string, string> = {};
+            for (const spec of (p.specifications || [])) {
+              const rawValue = spec.specValue?.trim() || (spec.valueNumber != null ? String(spec.valueNumber) : '');
+              if (!rawValue) continue;
+              const candidateKeys = [
+                spec.attributeDefinition?.attrKey?.trim().toLowerCase(),
+                spec.specKey?.trim().toLowerCase(),
+              ].filter(Boolean) as string[];
+              for (const candidateKey of candidateKeys) {
+                const originalKey = keyByLower.get(candidateKey);
+                if (originalKey) {
+                  parentOptions[originalKey] = rawValue;
+                  break;
+                }
+              }
+            }
+            setSelectedOptions(parentOptions);
+          }
+        } else {
+          setSelectedOptions({});
+        }
       })
       .catch(() => setError('Không tìm thấy sản phẩm'))
       .finally(() => setLoading(false));
-  }, [slug, navigate]);
+  }, [slug, navigate, displayVariantId]);
 
   useEffect(() => {
     if (variants.length === 0) return;
@@ -608,12 +657,13 @@ export default function ProductDetailPage() {
   const displayProductName = selectedVariant?.sku?.trim() ? selectedVariant.sku : product.name;
   const currentPrice = selectedVariant?.price ?? product.price;
   const selectedVariantPurchasable = Boolean(selectedVariant && selectedVariant.isActive && selectedVariant.stockQuantity > 0);
+  const isParentMatchingSelection = isSelectionComplete && parentMatchesSelection(selectedOptions);
   const currentStock = hasVariants
-    ? (selectedVariant?.stockQuantity ?? 0)
+    ? (selectedVariant?.stockQuantity ?? (isParentMatchingSelection ? (product.stockQuantity ?? 0) : 0))
     : (product.stockQuantity ?? 0);
-  const inStock = hasVariants ? selectedVariantPurchasable : parentPurchasable;
+  const inStock = hasVariants ? (selectedVariantPurchasable || isParentMatchingSelection) : parentPurchasable;
   const canAddToCart = hasVariants
-    ? isSelectionComplete && selectedVariantPurchasable
+    ? isSelectionComplete && (selectedVariantPurchasable || isParentMatchingSelection)
     : parentPurchasable;
 
   const handleAddToCart = async () => {
@@ -625,15 +675,15 @@ export default function ProductDetailPage() {
       setAddingToCart(true);
       setCartMsg(null);
       if (hasVariants && !isSelectionComplete) {
-        setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+        setCartMsg({ type: 'error', text: 'Vui lòng chọn phân loại sản phẩm' });
         return;
       }
-      if (hasVariants && !selectedVariant) {
-        setCartMsg({ type: 'error', text: 'Tổ hợp biến thể đã chọn hiện không khả dụng' });
+      if (hasVariants && !selectedVariant && !isParentMatchingSelection) {
+        setCartMsg({ type: 'error', text: 'Sản phẩm hiện không khả dụng' });
         return;
       }
-      if (hasVariants && !selectedVariantPurchasable) {
-        setCartMsg({ type: 'error', text: 'Biến thể đã chọn hiện không còn hàng hoặc đã ngưng bán' });
+      if (hasVariants && selectedVariant && !selectedVariantPurchasable) {
+        setCartMsg({ type: 'error', text: 'Sản phẩm không còn hàng hoặc đã ngưng bán' });
         return;
       }
       await addToCart(product.id, qty, selectedVariant?.id);
@@ -656,15 +706,15 @@ export default function ProductDetailPage() {
       return;
     }
     if (hasVariants && !isSelectionComplete) {
-      setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+      setCartMsg({ type: 'error', text: 'Vui lòng chọn phân loại sản phẩm' });
       return;
     }
-    if (hasVariants && !selectedVariant) {
-      setCartMsg({ type: 'error', text: 'Tổ hợp biến thể đã chọn hiện không khả dụng' });
+    if (hasVariants && !selectedVariant && !isParentMatchingSelection) {
+      setCartMsg({ type: 'error', text: 'Sản phẩm hiện không khả dụng' });
       return;
     }
-    if (hasVariants && !selectedVariantPurchasable) {
-      setCartMsg({ type: 'error', text: 'Biến thể đã chọn hiện không còn hàng hoặc đã ngưng bán' });
+    if (hasVariants && selectedVariant && !selectedVariantPurchasable) {
+      setCartMsg({ type: 'error', text: 'Sản phẩm đã chọn hiện không còn hàng hoặc đã ngưng bán' });
       return;
     }
     // Không thêm vào giỏ hàng, truyền thẳng sang checkout qua router state
@@ -834,12 +884,12 @@ export default function ProductDetailPage() {
                 </div>
               ))}
 
-              {hasVariants && isSelectionComplete && !selectedVariant && (
-                <p className="text-xs text-rose-500">Tổ hợp lựa chọn hiện tại chưa có hàng.</p>
-              )}
+              {/* {hasVariants && isSelectionComplete && !selectedVariant && (
+                <p className="text-xs text-rose-500">Hiện tại chưa có hàng.</p>
+              )} */}
 
               {hasVariants && !isSelectionComplete && (
-                <p className="text-xs text-slate-500">Vui lòng chọn đầy đủ thuộc tính để mua sản phẩm.</p>
+                <p className="text-xs text-slate-500">Vui lòng chọn phân loại sản phẩm.</p>
               )}
             </div>
           )}
@@ -851,18 +901,23 @@ export default function ProductDetailPage() {
                 selectedVariant ? (
                   <div className={`flex items-center gap-1.5 text-sm font-medium ${selectedVariantPurchasable ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {selectedVariantPurchasable ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    {selectedVariantPurchasable ? `Còn hàng (${currentStock})` : 'Biến thể đã hết hàng hoặc ngưng bán'}
+                    {selectedVariantPurchasable ? `Còn hàng (${currentStock})` : 'Sản phẩm đã hết hàng.'}
+                  </div>
+                ) : isParentMatchingSelection ? (
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Còn hàng ({currentStock})
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 text-sm font-medium text-rose-500">
                     <XCircle className="w-4 h-4" />
-                    Tổ hợp biến thể chưa khả dụng
+                    Sản phẩm hết hàng.
                   </div>
                 )
               ) : (
                 <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
                   <XCircle className="w-4 h-4" />
-                  Vui lòng chọn đầy đủ thuộc tính biến thể
+                  Vui lòng chọn phân loại sản phẩm.
                 </div>
               )
             ) : (
@@ -940,7 +995,7 @@ export default function ProductDetailPage() {
                 className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 <ShoppingCart className="w-4 h-4" />
-                {addingToCart ? 'Đang thêm...' : canAddToCart ? 'Thêm vào giỏ hàng' : hasVariants ? 'Chọn biến thể' : productStatus === 'INACTIVE' ? 'Ngưng bán' : 'Hết hàng'}
+                {addingToCart ? 'Đang thêm...' : canAddToCart ? 'Thêm vào giỏ hàng' : hasVariants ? 'Thêm vào giỏ hàng' : productStatus === 'INACTIVE' ? 'Ngưng bán' : 'Hết hàng'}
               </button>
               <button
                 onClick={handleBuyNow}

@@ -28,6 +28,16 @@ function resolveUrl(url: string) {
   return `${BASE_URL}/${url}`;
 }
 
+function formatPriceDisplay(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function parsePriceInput(formatted: string): string {
+  return formatted.replace(/\./g, '').replace(/\D/g, '');
+}
+
 export default function AdminProductForm() {
   const { id, variantId } = useParams<{ id: string; variantId?: string }>();
   const navigate = useNavigate();
@@ -596,12 +606,13 @@ export default function AdminProductForm() {
               <div>
                 <label className={labelClass}>Giá (VNĐ) <span className="text-rose-500">*</span></label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   required
-                  min={0}
-                  value={form.price}
-                  onChange={set('price')}
+                  value={formatPriceDisplay(form.price)}
+                  onChange={(e) => setForm((prev) => ({ ...prev, price: parsePriceInput(e.target.value) }))}
                   className={inputClass}
+                  placeholder="Ví dụ: 10.000.000"
                 />
               </div>
               <div>
@@ -875,11 +886,12 @@ export default function AdminProductForm() {
                       <div>
                         <label className={labelClass}>Giá</label>
                         <input
-                          type="number"
-                          min={0}
-                          value={row.price}
-                          onChange={(e) => updateVariantRow(row.tempId, { price: e.target.value })}
+                          type="text"
+                          inputMode="numeric"
+                          value={formatPriceDisplay(row.price)}
+                          onChange={(e) => updateVariantRow(row.tempId, { price: parsePriceInput(e.target.value) })}
                           className={inputClass}
+                          placeholder="Ví dụ: 10.000.000"
                         />
                       </div>
                       <div>

@@ -336,6 +336,7 @@ export interface CartItemResponse {
   product: Product;
   variantId: number | null;
   variantSku: string | null;
+  variantImageUrl: string | null;
   variantOptions: string[] | null;
   quantity: number;
   unitPrice: number;

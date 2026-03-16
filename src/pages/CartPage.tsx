@@ -174,9 +174,12 @@ export default function CartPage() {
         {/* Cart items */}
         <div className="lg:col-span-2 space-y-3">
           {cart.items.map((item) => {
-            const imgMedia = item.product.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE')
+            const fallbackMedia = item.product.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE')
               || item.product.media?.find((m) => m.mediaType === 'IMAGE');
-            const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+            const imgUrl = item.variantImageUrl
+              ? resolveUrl(item.variantImageUrl)
+              : fallbackMedia ? resolveUrl(fallbackMedia.mediaUrl) : null;
+            const displayName = item.variantSku || item.product.name;
             const isUpdating = updatingId === item.id;
             const isRemoving = removingId === item.id;
 
@@ -195,7 +198,7 @@ export default function CartPage() {
                 <Link to={getProductDetailPath(item.product)} className="shrink-0">
                   <div className="w-20 h-20 bg-slate-50 rounded-lg overflow-hidden flex items-center justify-center border border-slate-100">
                     {imgUrl ? (
-                      <img src={imgUrl} alt={item.product.name} className="object-contain w-full h-full p-1" />
+                      <img src={imgUrl} alt={displayName} className="object-contain w-full h-full p-1" />
                     ) : (
                       <Package className="w-8 h-8 text-slate-200" />
                     )}
@@ -208,7 +211,7 @@ export default function CartPage() {
                     to={getProductDetailPath(item.product)}
                     className="text-sm font-semibold text-slate-800 hover:text-indigo-600 line-clamp-2 transition-colors"
                   >
-                    {item.product.name}
+                    {displayName}
                   </Link>
                   {item.product.brand && (
                     <p className="text-xs text-indigo-500 font-medium mt-0.5">{item.product.brand.name}</p>
@@ -287,7 +290,7 @@ export default function CartPage() {
                 <div key={item.id} className="flex justify-between">
                   <span className={`truncate max-w-[60%] ${
                     isUnavailable(item) ? 'text-slate-400 line-through' : 'text-slate-500'
-                  }`}>{item.product.name}{item.variantSku ? ` (Biến thể: ${item.variantSku})` : ''} × {item.quantity}</span>
+                  }`}>{item.variantSku || item.product.name} × {item.quantity}</span>
                   {getItemStatus(item) === 'inactive' ? (
                     <span className="text-xs font-semibold text-slate-500">Ngưng bán</span>
                   ) : getItemStatus(item) === 'out_of_stock' ? (

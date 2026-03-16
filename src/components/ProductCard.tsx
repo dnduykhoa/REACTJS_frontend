@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Product, ProductStatus } from '../api/j2ee/types';
+import type { ProductWithDisplayHint } from '../utils/productPresentation';
 import { Package, ShoppingCart, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -27,7 +28,7 @@ const STATUS_BADGE: Record<Exclude<ProductStatus, 'ACTIVE'>, { label: string; cl
   INACTIVE: { label: 'Ngưng bán', cls: 'bg-rose-600/80 backdrop-blur-sm text-white' },
 };
 
-export default function ProductCard({ product }: { product: Product }) {
+export default function ProductCard({ product }: { product: ProductWithDisplayHint }) {
   const imgUrl = getImageUrl(product);
   const status = resolveStatus(product);
   const unavailable = status !== 'ACTIVE';
@@ -37,12 +38,15 @@ export default function ProductCard({ product }: { product: Product }) {
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
 
+  const detailPath = getProductDetailPath(product);
+  const detailState = { displayVariantId: product._displayVariantId ?? null };
+
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     if ((product.variants?.length || 0) > 0) {
-      navigate(getProductDetailPath(product));
+      navigate(detailPath, { state: detailState });
       return;
     }
 
@@ -67,7 +71,7 @@ export default function ProductCard({ product }: { product: Product }) {
       unavailable ? 'opacity-70 grayscale-25' : 'hover:shadow-lg hover:-translate-y-1'
     }`}>
       {/* Image */}
-      <Link to={getProductDetailPath(product)} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden">
+      <Link to={detailPath} state={detailState} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden">
         {imgUrl ? (
           <img
             src={imgUrl}
@@ -93,7 +97,7 @@ export default function ProductCard({ product }: { product: Product }) {
             {product.brand.name}
           </p>
         )}
-        <Link to={getProductDetailPath(product)} className="flex-1">
+        <Link to={detailPath} state={detailState} className="flex-1">
           <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug hover:text-indigo-600 transition-colors">
             {product.name}
           </h3>
