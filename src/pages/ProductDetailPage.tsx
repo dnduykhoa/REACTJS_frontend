@@ -277,6 +277,22 @@ export default function ProductDetailPage() {
         return null;
       }
 
+      // When no variant is selected (parent specs shown), ensure we display a parent image.
+      // If the current image belongs to a variant (not in product.media), reset to parent primary.
+      if (!selectedVariant && current) {
+        const isParentImage = (product.media || []).some((m) => m.id === current.id);
+        if (!isParentImage) {
+          const parentImages = [...(product.media || [])]
+            .filter((m) => m.mediaType === 'IMAGE')
+            .sort(mediaSort);
+          const parentPrimary = parentImages.find((m) => m.isPrimary) || parentImages[0];
+          if (parentPrimary && imagePool.some((m) => m.id === parentPrimary.id)) {
+            return parentPrimary;
+          }
+          return imagePool.find((m) => m.isPrimary) || imagePool[0];
+        }
+      }
+
       if (current && imagePool.some((media) => media.id === current.id)) {
         return current;
       }
