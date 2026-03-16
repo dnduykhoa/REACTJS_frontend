@@ -249,7 +249,7 @@ export interface ProductVariantRequest {
 }
 
 // ─── Product ──────────────────────────────────────────────────────────────────
-export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'OUT_OF_STOCK';
+export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'OUT_OF_STOCK' | 'NEW_ARRIVAL';
 
 export interface Product {
   id: number;

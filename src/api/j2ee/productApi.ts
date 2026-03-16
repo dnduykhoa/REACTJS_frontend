@@ -123,6 +123,9 @@ export const productApi = {
   toggleActive: (id: number) =>
     apiClient.patch<ApiResponse<Product>>(`/api/products/${id}/toggle-active`),
 
+  newArrival: (id: number) =>
+    apiClient.patch<ApiResponse<Product>>(`/api/products/${id}/new-arrival`),
+
   outOfStock: (id: number) =>
     apiClient.patch<ApiResponse<Product>>(`/api/products/${id}/out-of-stock`),
 

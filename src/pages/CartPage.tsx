@@ -119,7 +119,7 @@ export default function CartPage() {
   };
 
   const isUnavailable = (item: CartItemResponse) =>
-    !item.inStock || item.product.isActive === false || item.product.status === 'INACTIVE';
+    item.product.isActive === false || item.product.status === 'INACTIVE';
 
   const getItemStatus = (item: CartItemResponse) => {
     if (item.product.isActive === false || item.product.status === 'INACTIVE') return 'inactive';
@@ -223,11 +223,11 @@ export default function CartPage() {
                   {/* Stock warning */}
                   {getItemStatus(item) === 'inactive' ? (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-1">
-                      <Ban className="w-3 h-3" /> Ngưng bán
+                      <Ban className="w-3 h-3" /> Ngừng kinh doanh
                     </span>
                   ) : getItemStatus(item) === 'out_of_stock' ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 bg-rose-100 px-2 py-0.5 rounded-full mt-1">
-                      <XCircle className="w-3 h-3" /> Hết hàng
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full mt-1">
+                      <XCircle className="w-3 h-3" /> Hàng sắp về
                     </span>
                   ) : item.availableStock <= 5 ? (
                     <p className="text-xs text-amber-600 font-medium mt-1">Còn {item.availableStock} sản phẩm</p>
@@ -292,9 +292,9 @@ export default function CartPage() {
                     isUnavailable(item) ? 'text-slate-400 line-through' : 'text-slate-500'
                   }`}>{item.variantSku || item.product.name} × {item.quantity}</span>
                   {getItemStatus(item) === 'inactive' ? (
-                    <span className="text-xs font-semibold text-slate-500">Ngưng bán</span>
+                    <span className="text-xs font-semibold text-slate-500">Ngừng kinh doanh</span>
                   ) : getItemStatus(item) === 'out_of_stock' ? (
-                    <span className="text-xs font-semibold text-rose-500">Hết hàng</span>
+                    <span className="text-xs font-semibold text-amber-700">Hàng sắp về</span>
                   ) : (
                     <span className="font-medium text-slate-700">{Number(item.subtotal).toLocaleString('vi-VN')}₫</span>
                   )}
@@ -315,7 +315,7 @@ export default function CartPage() {
             {hasUnavailable && (
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-3 py-2.5 rounded-xl mb-3">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>Giỏ hàng có sản phẩm không khả dụng (hết hàng hoặc ngưng bán). Vui lòng xóa trước khi thanh toán.</span>
+                <span>Giỏ hàng có sản phẩm không khả dụng (ngừng kinh doanh). Vui lòng xóa trước khi thanh toán.</span>
               </div>
             )}
 

@@ -24,14 +24,15 @@ function resolveStatus(product: Product): ProductStatus {
 }
 
 const STATUS_BADGE: Record<Exclude<ProductStatus, 'ACTIVE'>, { label: string; cls: string }> = {
-  OUT_OF_STOCK: { label: 'Hết hàng', cls: 'bg-slate-900/70 backdrop-blur-sm text-white' },
-  INACTIVE: { label: 'Ngưng bán', cls: 'bg-rose-600/80 backdrop-blur-sm text-white' },
+  NEW_ARRIVAL: { label: 'Hàng mới về', cls: 'bg-emerald-600/80 backdrop-blur-sm text-white' },
+  OUT_OF_STOCK: { label: 'Hàng sắp về', cls: 'bg-slate-900/70 backdrop-blur-sm text-white' },
+  INACTIVE: { label: 'Ngừng kinh doanh', cls: 'bg-rose-600/80 backdrop-blur-sm text-white' },
 };
 
 export default function ProductCard({ product }: { product: ProductWithDisplayHint }) {
   const imgUrl = getImageUrl(product);
   const status = resolveStatus(product);
-  const unavailable = status !== 'ACTIVE';
+  const purchasable = status === 'ACTIVE' || status === 'NEW_ARRIVAL' || status === 'OUT_OF_STOCK';
   const { user } = useAuth();
   const { addToCart } = useCart();
   const navigate = useNavigate();
@@ -68,7 +69,7 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
 
   return (
     <div className={`group bg-white rounded-xl border border-slate-100 shadow-sm transition-all duration-200 overflow-hidden flex flex-col ${
-      unavailable ? 'opacity-70 grayscale-25' : 'hover:shadow-lg hover:-translate-y-1'
+      !purchasable ? 'opacity-70 grayscale-25' : 'hover:shadow-lg hover:-translate-y-1'
     }`}>
       {/* Image */}
       <Link to={detailPath} state={detailState} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden">
@@ -77,13 +78,13 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
             src={imgUrl}
             alt={product.name}
             className={`object-contain h-full w-full p-3 transition-transform duration-300 ${
-              unavailable ? '' : 'group-hover:scale-[1.04]'
+              !purchasable ? '' : 'group-hover:scale-[1.04]'
             }`}
           />
         ) : (
           <Package className="w-14 h-14 text-slate-200" />
         )}
-        {unavailable && (
+        {!purchasable && (
           <span className={`absolute top-2 right-2 text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_BADGE[status as Exclude<ProductStatus, 'ACTIVE'>].cls}`}>
             {STATUS_BADGE[status as Exclude<ProductStatus, 'ACTIVE'>].label}
           </span>
@@ -103,10 +104,10 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
           </h3>
         </Link>
         <div className="flex items-center justify-between mt-2">
-          <p className={`text-base font-bold ${unavailable ? 'text-slate-400' : 'text-[#e60012]'}`}>
+          <p className={`text-base font-bold ${purchasable ? 'text-[#e60012]' : 'text-slate-400'}`}>
             {Number(product.price).toLocaleString('vi-VN')}₫
           </p>
-          {!unavailable && product.stockQuantity > 0 && product.stockQuantity <= 5 && (
+          {purchasable && product.stockQuantity > 0 && product.stockQuantity <= 5 && (
             <span className="text-xs text-amber-600 font-medium">
               Còn {product.stockQuantity}
             </span>
@@ -116,21 +117,21 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
         {/* Add to cart button */}
         <button
           onClick={handleAddToCart}
-          disabled={unavailable || adding}
+          disabled={!purchasable || adding}
           className={`mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors
             ${added
               ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-              : unavailable
+              : !purchasable
               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
               : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600'
             }`}
         >
           {added ? (
             <><CheckCircle2 className="w-3.5 h-3.5" /> Đã thêm</>
-          ) : unavailable ? (
-            <><ShoppingCart className="w-3.5 h-3.5" /> {status === 'INACTIVE' ? 'Ngưng bán' : 'Hết hàng'}</>
+          ) : !purchasable ? (
+            <><ShoppingCart className="w-3.5 h-3.5" /> {status === 'INACTIVE' ? 'Ngừng kinh doanh' : (status === 'OUT_OF_STOCK' ? 'Hàng sắp về' : 'Không khả dụng')}</>
           ) : (
-            <><ShoppingCart className="w-3.5 h-3.5" /> {adding ? 'Đang thêm...' : 'Thêm vào giỏ'}</>
+            <><ShoppingCart className="w-3.5 h-3.5" /> {status === 'OUT_OF_STOCK' ? 'Đặt trước' : (adding ? 'Đang thêm...' : 'Thêm vào giỏ')}</>
           )}
         </button>
       </div>
