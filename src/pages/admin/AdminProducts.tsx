@@ -8,18 +8,20 @@ import Pagination from '../../components/Pagination';
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 const PAGE_SIZE = 15;
 
-type StatusTab = 'all' | 'active' | 'inactive' | 'out_of_stock';
+type StatusTab = 'all' | 'active' | 'inactive' | 'out_of_stock' | 'new_arrival';
 
 const TABS: { key: StatusTab; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
   { key: 'active', label: 'Đang bán' },
-  { key: 'inactive', label: 'Ngưng bán' },
-  { key: 'out_of_stock', label: 'Hết hàng' },
+  { key: 'new_arrival', label: 'Hàng mới về' },
+  { key: 'inactive', label: 'Ngừng kinh doanh' },
+  { key: 'out_of_stock', label: 'Hàng sắp về' },
 ];
 
 function matchesTab(status: ProductStatus, tab: StatusTab) {
   if (tab === 'all') return true;
   if (tab === 'active') return status === 'ACTIVE';
+  if (tab === 'new_arrival') return status === 'NEW_ARRIVAL';
   if (tab === 'inactive') return status === 'INACTIVE';
   return status === 'OUT_OF_STOCK';
 }
@@ -143,8 +145,9 @@ function buildCategoryOptions(categories: Category[]): { id: number; label: stri
 function StatusBadge({ status }: { status: ProductStatus }) {
   const cfg: Record<ProductStatus, { cls: string; label: string }> = {
     ACTIVE: { cls: 'bg-emerald-100 text-emerald-700', label: 'Đang bán' },
-    INACTIVE: { cls: 'bg-slate-100 text-slate-500', label: 'Ngưng bán' },
-    OUT_OF_STOCK: { cls: 'bg-amber-100 text-amber-700', label: 'Hết hàng' },
+    NEW_ARRIVAL: { cls: 'bg-emerald-100 text-emerald-700', label: 'Hàng mới về' },
+    INACTIVE: { cls: 'bg-slate-100 text-slate-500', label: 'Ngừng kinh doanh' },
+    OUT_OF_STOCK: { cls: 'bg-amber-100 text-amber-700', label: 'Hàng sắp về' },
   };
   const { cls, label } = cfg[status];
   return <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-semibold ${cls}`}>{label}</span>;
@@ -256,7 +259,7 @@ export default function AdminProducts() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Ngưng bán sản phẩm này? Sản phẩm sẽ chuyển sang trạng thái Ngưng bán.')) return;
+    if (!confirm('Ngừng kinh doanh sản phẩm này? Sản phẩm sẽ chuyển sang trạng thái Ngừng kinh doanh.')) return;
     setActionId(`product-${id}`);
     try {
       await productApi.delete(id);
@@ -281,10 +284,23 @@ export default function AdminProducts() {
   };
 
   const handleOutOfStock = async (id: number) => {
-    if (!confirm('Đánh dấu sản phẩm này là hết hàng?')) return;
+    if (!confirm('Đánh dấu sản phẩm này là hàng sắp về?')) return;
     setActionId(`product-${id}`);
     try {
       await productApi.outOfStock(id);
+      await loadProducts(search);
+    } catch {
+      alert('Thao tác thất bại');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleNewArrival = async (id: number) => {
+    if (!confirm('Đánh dấu sản phẩm này là hàng mới về?')) return;
+    setActionId(`product-${id}`);
+    try {
+      await productApi.newArrival(id);
       await loadProducts(search);
     } catch {
       alert('Thao tác thất bại');
@@ -462,16 +478,26 @@ export default function AdminProducts() {
                               <Pencil size={14} />
                             </Link>
                             {status === 'ACTIVE' && (
-                              <button
-                                onClick={() => handleOutOfStock(product.id)}
-                                disabled={busy}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
-                                title="Đánh dấu hết hàng"
-                              >
-                                <PackageX size={14} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOutOfStock(product.id)}
+                                  disabled={busy}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                                  title="Đánh dấu hàng sắp về"
+                                >
+                                  <PackageX size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleNewArrival(product.id)}
+                                  disabled={busy}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-800 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                                  title="Đánh dấu hàng mới về"
+                                >
+                                  <Package size={14} />
+                                </button>
+                              </>
                             )}
-                            {(status === 'INACTIVE' || status === 'OUT_OF_STOCK') && (
+                            {(status === 'INACTIVE' || status === 'OUT_OF_STOCK' || status === 'NEW_ARRIVAL') && (
                               <button
                                 onClick={() => handleRestore(product.id)}
                                 disabled={busy}
@@ -486,7 +512,7 @@ export default function AdminProducts() {
                                 onClick={() => handleDelete(product.id)}
                                 disabled={busy}
                                 className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
-                                title="Ngưng bán"
+                                title="Ngừng kinh doanh"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -537,12 +563,12 @@ export default function AdminProducts() {
                               {variantStatus === 'ACTIVE' && (
                                 <button
                                   onClick={() => {
-                                    if (!confirm('Đánh dấu biến thể này là hết hàng?')) return;
+                                    if (!confirm('Đánh dấu biến thể này là hàng sắp về?')) return;
                                     handleVariantUpdate(product.id, variant, { stockQuantity: 0, isActive: true });
                                   }}
                                   disabled={variantBusy}
                                   className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
-                                  title="Đánh dấu biến thể hết hàng"
+                                  title="Đánh dấu biến thể hàng sắp về"
                                 >
                                   <PackageX size={14} />
                                 </button>
@@ -560,12 +586,12 @@ export default function AdminProducts() {
                               {variantStatus !== 'INACTIVE' && (
                                 <button
                                   onClick={() => {
-                                    if (!confirm('Ngưng bán biến thể này?')) return;
+                                    if (!confirm('Ngừng kinh doanh biến thể này?')) return;
                                     handleVariantUpdate(product.id, variant, { isActive: false });
                                   }}
                                   disabled={variantBusy}
                                   className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
-                                  title="Ngưng bán biến thể"
+                                  title="Ngừng kinh doanh biến thể"
                                 >
                                   <Trash2 size={14} />
                                 </button>

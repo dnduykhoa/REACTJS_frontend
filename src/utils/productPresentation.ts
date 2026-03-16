@@ -24,6 +24,15 @@ function resolveProductStatus(product: Product): ProductStatus {
   return product.status ?? (product.isActive ? (product.stockQuantity > 0 ? 'ACTIVE' : 'OUT_OF_STOCK') : 'INACTIVE');
 }
 
+function getStatusPriority(product: Product): number {
+  const status = resolveProductStatus(product);
+  if (status === 'NEW_ARRIVAL') return 100;
+  if (status === 'ACTIVE') return 90;
+  if (status === 'OUT_OF_STOCK') return 80;
+  if (status === 'INACTIVE') return 10;
+  return 0;
+}
+
 function isVariantAvailable(variant: ProductVariant): boolean {
   return Boolean(variant.isActive) && Number(variant.stockQuantity || 0) > 0;
 }
@@ -70,5 +79,7 @@ export function dedupeDisplayProducts(products: Product[]): ProductWithDisplayHi
     }
   }
 
-  return Array.from(byKey.values()).map(toDisplayProduct);
+  return Array.from(byKey.values())
+    .sort((a, b) => getStatusPriority(b) - getStatusPriority(a))
+    .map(toDisplayProduct);
 }
