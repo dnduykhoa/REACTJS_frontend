@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { productApi, productVariantApi } from '../api/j2ee';
-import type { Product, ProductMedia, ProductVariant } from '../api/j2ee/types';
+import type { Product, ProductMedia, ProductStatus, ProductVariant } from '../api/j2ee/types';
 import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -71,6 +71,10 @@ function formatSpecDisplayValue(
     return unit ? `${rawValue} ${unit}` : rawValue;
   }
   return rawValue;
+}
+
+function resolveProductStatus(product: Product): ProductStatus {
+  return product.status ?? (product.isActive ? (product.stockQuantity > 0 ? 'ACTIVE' : 'OUT_OF_STOCK') : 'INACTIVE');
 }
 
 export default function ProductDetailPage() {
@@ -434,20 +438,18 @@ export default function ProductDetailPage() {
   }
   const hasVariants = variants.length > 0;
   const requiredOptionKeys = Object.keys(optionMap);
-  const hasActiveSelections = Object.values(selectedOptions).some((value) => Boolean(value));
   const isSelectionComplete = !hasVariants || requiredOptionKeys.every((key) => Boolean(selectedOptions[key]));
-  const isParentSelectionMatch = hasActiveSelections && requiredOptionKeys.every((key) => {
-    const selected = selectedOptions[key];
-    if (!selected) return true;
-    return parentOptionValues[key] === selected;
-  });
 
   const variantHasOption = (variant: ProductVariant, key: string, value: string) =>
     (variant.values || []).some(
       (variantValue) => variantValue.attrKey === key && getVariantComparableValue(variantValue) === value
     );
 
+  const productStatus = resolveProductStatus(product);
+  const parentPurchasable = productStatus === 'ACTIVE' && (product.stockQuantity ?? 0) > 0;
+
   const parentMatchesSelection = (selection: Record<string, string>) => {
+    if (!parentPurchasable) return false;
     const entries = Object.entries(selection).filter(([, value]) => Boolean(value));
     if (entries.length === 0) return true;
     return entries.every(([key, value]) => parentOptionValues[key] === value);
@@ -603,12 +605,16 @@ export default function ProductDetailPage() {
     grouped[row.group].push({ key: row.key, value });
   }
 
-  const isDiscontinued = product.status === 'INACTIVE' || (!product.isActive && product.status !== 'OUT_OF_STOCK');
   const displayProductName = selectedVariant?.sku?.trim() ? selectedVariant.sku : product.name;
   const currentPrice = selectedVariant?.price ?? product.price;
-  const currentStock = selectedVariant?.stockQuantity ?? product.stockQuantity;
-  const inStock = !isDiscontinued && currentStock > 0;
-  const canAddToCart = inStock && !isDiscontinued && (!hasActiveSelections || !!selectedVariant || isParentSelectionMatch);
+  const selectedVariantPurchasable = Boolean(selectedVariant && selectedVariant.isActive && selectedVariant.stockQuantity > 0);
+  const currentStock = hasVariants
+    ? (selectedVariant?.stockQuantity ?? 0)
+    : (product.stockQuantity ?? 0);
+  const inStock = hasVariants ? selectedVariantPurchasable : parentPurchasable;
+  const canAddToCart = hasVariants
+    ? isSelectionComplete && selectedVariantPurchasable
+    : parentPurchasable;
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -618,8 +624,16 @@ export default function ProductDetailPage() {
     try {
       setAddingToCart(true);
       setCartMsg(null);
-      if (hasVariants && hasActiveSelections && !selectedVariant && !isParentSelectionMatch) {
+      if (hasVariants && !isSelectionComplete) {
+        setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+        return;
+      }
+      if (hasVariants && !selectedVariant) {
         setCartMsg({ type: 'error', text: 'Tổ hợp biến thể đã chọn hiện không khả dụng' });
+        return;
+      }
+      if (hasVariants && !selectedVariantPurchasable) {
+        setCartMsg({ type: 'error', text: 'Biến thể đã chọn hiện không còn hàng hoặc đã ngưng bán' });
         return;
       }
       await addToCart(product.id, qty, selectedVariant?.id);
@@ -641,8 +655,16 @@ export default function ProductDetailPage() {
       navigate('/login');
       return;
     }
-    if (hasVariants && hasActiveSelections && !selectedVariant && !isParentSelectionMatch) {
+    if (hasVariants && !isSelectionComplete) {
+      setCartMsg({ type: 'error', text: 'Vui lòng chọn đầy đủ thuộc tính biến thể' });
+      return;
+    }
+    if (hasVariants && !selectedVariant) {
       setCartMsg({ type: 'error', text: 'Tổ hợp biến thể đã chọn hiện không khả dụng' });
+      return;
+    }
+    if (hasVariants && !selectedVariantPurchasable) {
+      setCartMsg({ type: 'error', text: 'Biến thể đã chọn hiện không còn hàng hoặc đã ngưng bán' });
       return;
     }
     // Không thêm vào giỏ hàng, truyền thẳng sang checkout qua router state
@@ -812,28 +834,49 @@ export default function ProductDetailPage() {
                 </div>
               ))}
 
-              {hasVariants && hasActiveSelections && !selectedVariant && !isParentSelectionMatch && (
+              {hasVariants && isSelectionComplete && !selectedVariant && (
                 <p className="text-xs text-rose-500">Tổ hợp lựa chọn hiện tại chưa có hàng.</p>
               )}
 
-              {hasVariants && !isSelectionComplete && !hasActiveSelections && (
-                <p className="text-xs text-slate-500">Bạn có thể mua sản phẩm cha hoặc chọn thêm thuộc tính biến thể.</p>
+              {hasVariants && !isSelectionComplete && (
+                <p className="text-xs text-slate-500">Vui lòng chọn đầy đủ thuộc tính để mua sản phẩm.</p>
               )}
             </div>
           )}
 
           {/* Stock & category */}
           <div className="flex flex-wrap items-center gap-3">
-            {isDiscontinued ? (
-              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
-                <XCircle className="w-4 h-4" />
-                Ngưng bán
-              </div>
+            {hasVariants ? (
+              isSelectionComplete ? (
+                selectedVariant ? (
+                  <div className={`flex items-center gap-1.5 text-sm font-medium ${selectedVariantPurchasable ? 'text-emerald-600' : 'text-rose-500'}`}>
+                    {selectedVariantPurchasable ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    {selectedVariantPurchasable ? `Còn hàng (${currentStock})` : 'Biến thể đã hết hàng hoặc ngưng bán'}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-rose-500">
+                    <XCircle className="w-4 h-4" />
+                    Tổ hợp biến thể chưa khả dụng
+                  </div>
+                )
+              ) : (
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
+                  <XCircle className="w-4 h-4" />
+                  Vui lòng chọn đầy đủ thuộc tính biến thể
+                </div>
+              )
             ) : (
-              <div className={`flex items-center gap-1.5 text-sm font-medium ${inStock ? 'text-emerald-600' : 'text-rose-500'}`}>
-                {inStock ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                {inStock ? `Còn hàng (${currentStock})` : 'Hết hàng'}
-              </div>
+              productStatus === 'INACTIVE' ? (
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
+                  <XCircle className="w-4 h-4" />
+                  Ngưng bán
+                </div>
+              ) : (
+                <div className={`flex items-center gap-1.5 text-sm font-medium ${inStock ? 'text-emerald-600' : 'text-rose-500'}`}>
+                  {inStock ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  {inStock ? `Còn hàng (${currentStock})` : 'Hết hàng'}
+                </div>
+              )
             )}
             {product.category && (
               <Link
@@ -897,7 +940,7 @@ export default function ProductDetailPage() {
                 className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 <ShoppingCart className="w-4 h-4" />
-                {addingToCart ? 'Đang thêm...' : isDiscontinued ? 'Ngưng bán' : canAddToCart ? 'Thêm vào giỏ hàng' : 'Hết hàng'}
+                {addingToCart ? 'Đang thêm...' : canAddToCart ? 'Thêm vào giỏ hàng' : hasVariants ? 'Chọn biến thể' : productStatus === 'INACTIVE' ? 'Ngưng bán' : 'Hết hàng'}
               </button>
               <button
                 onClick={handleBuyNow}
