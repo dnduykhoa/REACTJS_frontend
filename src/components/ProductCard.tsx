@@ -40,6 +40,12 @@ export default function ProductCard({ product }: { product: Product }) {
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if ((product.variants?.length || 0) > 0) {
+      navigate(getProductDetailPath(product));
+      return;
+    }
+
     if (!user) {
       navigate('/login');
       return;
@@ -58,10 +64,10 @@ export default function ProductCard({ product }: { product: Product }) {
 
   return (
     <div className={`group bg-white rounded-xl border border-slate-100 shadow-sm transition-all duration-200 overflow-hidden flex flex-col ${
-      unavailable ? 'opacity-70 grayscale-[25%]' : 'hover:shadow-lg hover:-translate-y-1'
+      unavailable ? 'opacity-70 grayscale-25' : 'hover:shadow-lg hover:-translate-y-1'
     }`}>
       {/* Image */}
-      <Link to={getProductDetailPath(product)} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden block">
+      <Link to={getProductDetailPath(product)} className="relative h-48 bg-slate-50 flex items-center justify-center overflow-hidden">
         {imgUrl ? (
           <img
             src={imgUrl}

@@ -410,7 +410,10 @@ export default function AdminProducts() {
                 return (
                   <Fragment key={product.id}>
                     {productMatchesCurrentTab && (
-                      <tr className="border-t border-slate-100 hover:bg-slate-50 transition-colors align-top">
+                      <tr
+                        className={`border-t border-slate-100 hover:bg-slate-50 transition-colors align-top ${variants.length > 0 ? 'cursor-pointer' : ''}`}
+                        onClick={variants.length > 0 ? () => toggleExpanded(product.id) : undefined}
+                      >
                         <td className="px-4 py-3 text-slate-400 tabular-nums">{(page - 1) * PAGE_SIZE + index + 1}</td>
                         <td className="px-4 py-3">
                           {img ? (
@@ -426,11 +429,14 @@ export default function AdminProducts() {
                             {variants.length > 0 ? (
                               <button
                                 type="button"
-                                onClick={() => toggleExpanded(product.id)}
-                                className="mt-0.5 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpanded(product.id);
+                                }}
+                                className="mt-0.5 p-1.5 rounded-lg text-slate-700 hover:text-slate-900"
                                 aria-label={expanded ? 'Thu gọn biến thể' : 'Mở rộng biến thể'}
                               >
-                                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                {expanded ? <ChevronDown size={16} strokeWidth={2.6} /> : <ChevronRight size={16} strokeWidth={2.6} />}
                               </button>
                             ) : (
                               <span className="w-6" />
@@ -446,7 +452,7 @@ export default function AdminProducts() {
                         <td className="px-4 py-3 text-right font-semibold text-indigo-600">{Number(product.price).toLocaleString('vi-VN')}₫</td>
                         <td className="px-4 py-3 text-center text-slate-600">{product.stockQuantity}</td>
                         <td className="px-4 py-3 text-center"><StatusBadge status={status} /></td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
                             <Link
                               to={`/admin/products/${product.id}/edit`}
@@ -496,7 +502,9 @@ export default function AdminProducts() {
                       const variantBusy = actionId === `variant-${variant.id}`;
                       return (
                         <tr key={`${product.id}-${variant.id}`} className="border-t border-slate-100 bg-slate-50/60 hover:bg-slate-50">
-                          <td className="px-4 py-3 text-slate-300">{productMatchesCurrentTab ? '↳' : (page - 1) * PAGE_SIZE + index + 1}</td>
+                          <td className={`px-4 py-3 ${productMatchesCurrentTab ? 'text-slate-600 font-bold tracking-wide' : 'text-slate-300'}`}>
+                            {productMatchesCurrentTab ? '└─' : (page - 1) * PAGE_SIZE + index + 1}
+                          </td>
                           <td className="px-4 py-3">
                             {variantImg ? (
                               <img src={variantImg} alt="" className="w-10 h-10 object-cover rounded-xl border border-slate-200" />
@@ -508,7 +516,7 @@ export default function AdminProducts() {
                           </td>
                           <td className="px-4 py-3 max-w-sm">
                             <div className={productMatchesCurrentTab ? 'pl-8' : ''}>
-                              <span className="line-clamp-1 font-medium text-slate-800 block">{product.name} • {variant.sku}</span>
+                              <span className="line-clamp-1 font-medium text-slate-800 block"> • {variant.sku}</span>
                               <span className="text-xs text-slate-400 block mt-0.5">{buildVariantDetail(variant)}</span>
                             </div>
                           </td>
