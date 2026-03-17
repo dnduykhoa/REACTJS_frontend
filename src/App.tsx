@@ -30,6 +30,7 @@ import AdminCategoryAttributes from './pages/admin/AdminCategoryAttributes';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminCarousel from './pages/admin/AdminCarousel';
 import AdminOrders from './pages/admin/AdminOrders';
+import AdminPreorders from './pages/admin/AdminPreorders';
 
 export default function App() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="preorders" element={<AdminPreorders />} />
           </Route>
         </Routes>
         </CartProvider>

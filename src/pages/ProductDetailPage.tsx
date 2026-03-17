@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { productApi, productVariantApi } from '../api/j2ee';
+import { preorderApi, productApi, productVariantApi } from '../api/j2ee';
 import type { Product, ProductMedia, ProductStatus, ProductVariant } from '../api/j2ee/types';
 import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { buildProductSlug, extractProductIdFromSlug } from '../utils/productSlug';
+import { validateVietnamesePhone } from '../utils/phoneUtils';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -90,7 +91,14 @@ export default function ProductDetailPage() {
   const [error, setError] = useState('');
   const [qty, setQty] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [submittingPreorder, setSubmittingPreorder] = useState(false);
   const [cartMsg, setCartMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [preorderForm, setPreorderForm] = useState({
+    customerName: '',
+    phone: '',
+    email: '',
+    desiredQuantity: '1',
+  });
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
@@ -249,6 +257,15 @@ export default function ProductDetailPage() {
       .catch(() => setError('Không tìm thấy sản phẩm'))
       .finally(() => setLoading(false));
   }, [slug, navigate, displayVariantId]);
+
+  useEffect(() => {
+    setPreorderForm((prev) => ({
+      customerName: prev.customerName || user?.fullName || user?.username || '',
+      phone: prev.phone || user?.phone || '',
+      email: prev.email || user?.email || '',
+      desiredQuantity: prev.desiredQuantity || '1',
+    }));
+  }, [user]);
 
   useEffect(() => {
     if (variants.length === 0) return;
@@ -674,18 +691,27 @@ export default function ProductDetailPage() {
 
   const displayProductName = selectedVariant?.sku?.trim() ? selectedVariant.sku : product.name;
   const currentPrice = selectedVariant?.price ?? product.price;
-  const selectedVariantPurchasable = Boolean(selectedVariant && selectedVariant.isActive && selectedVariant.stockQuantity > 0);
-  const selectedVariantPreorderable = Boolean(selectedVariant && selectedVariant.isActive && selectedVariant.stockQuantity <= 0);
   const isParentMatchingSelection = isSelectionComplete && parentMatchesSelection(selectedOptions);
-  const currentStock = hasVariants
-    ? (selectedVariant?.stockQuantity ?? (isParentMatchingSelection ? (product.stockQuantity ?? 0) : 0))
-    : (product.stockQuantity ?? 0);
-  const inStock = hasVariants
-    ? (selectedVariantPurchasable || isParentMatchingSelection)
-    : parentPurchasable;
-  const canAddToCart = hasVariants
-    ? isSelectionComplete && (selectedVariantPurchasable || selectedVariantPreorderable || isParentMatchingSelection)
-    : parentPurchasableOrPreorderable;
+  const selectedVariantStatus: ProductStatus | null = selectedVariant
+    ? (!selectedVariant.isActive
+      ? 'INACTIVE'
+      : selectedVariant.stockQuantity > 0
+        ? 'ACTIVE'
+        : 'OUT_OF_STOCK')
+    : null;
+  const canUseParent = !hasVariants || (isSelectionComplete && !selectedVariant && isParentMatchingSelection);
+  const effectiveStatus: ProductStatus | null = selectedVariantStatus ?? (canUseParent ? productStatus : null);
+  const effectivePreorderable = effectiveStatus === 'OUT_OF_STOCK';
+  const effectivePurchasable = effectiveStatus === 'ACTIVE' || effectiveStatus === 'NEW_ARRIVAL';
+  const canAddToCart = Boolean(effectiveStatus && effectivePurchasable);
+  const canBuyNow = canAddToCart;
+  const canPreorder = Boolean(effectivePreorderable);
+  const currentStock = selectedVariant
+    ? (selectedVariant.stockQuantity ?? 0)
+    : canUseParent
+      ? (product.stockQuantity ?? 0)
+      : 0;
+  const inStock = effectivePurchasable;
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -738,6 +764,10 @@ export default function ProductDetailPage() {
       setCartMsg({ type: 'error', text: 'Sản phẩm đã ngừng kinh doanh' });
       return;
     }
+    if (!canBuyNow) {
+      setCartMsg({ type: 'error', text: 'Sản phẩm này hiện chưa thể mua ngay' });
+      return;
+    }
     // Không thêm vào giỏ hàng, truyền thẳng sang checkout qua router state
     navigate('/checkout', {
       state: {
@@ -751,6 +781,62 @@ export default function ProductDetailPage() {
         },
       },
     });
+  };
+
+  const handlePreorderSubmit = async () => {
+    if (!product || !canPreorder) return;
+
+    if (hasVariants && !isSelectionComplete) {
+      setCartMsg({ type: 'error', text: 'Vui lòng chọn phân loại sản phẩm' });
+      return;
+    }
+
+    if (hasVariants && !selectedVariant && !isParentMatchingSelection) {
+      setCartMsg({ type: 'error', text: 'Vui lòng chọn đúng phân loại cần chờ hàng' });
+      return;
+    }
+
+    const customerName = preorderForm.customerName.trim();
+    const phone = preorderForm.phone.trim();
+    const email = preorderForm.email.trim();
+    const desiredQuantity = Math.max(1, Number(preorderForm.desiredQuantity || '1'));
+
+    if (!customerName) {
+      setCartMsg({ type: 'error', text: 'Vui lòng nhập họ tên' });
+      return;
+    }
+
+    const phoneError = validateVietnamesePhone(phone);
+    if (phoneError) {
+      setCartMsg({ type: 'error', text: phoneError });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setCartMsg({ type: 'error', text: 'Email không hợp lệ' });
+      return;
+    }
+
+    try {
+      setSubmittingPreorder(true);
+      setCartMsg(null);
+      await preorderApi.create({
+        productId: product.id,
+        variantId: selectedVariant?.id,
+        customerName,
+        phone,
+        email,
+        desiredQuantity,
+      });
+      setCartMsg({ type: 'success', text: 'Đăng ký chờ hàng thành công. Hệ thống sẽ gửi email khi hàng về.' });
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Không thể gửi yêu cầu chờ hàng';
+      setCartMsg({ type: 'error', text: msg });
+    } finally {
+      setSubmittingPreorder(false);
+    }
   };
 
   return (
@@ -917,42 +1003,31 @@ export default function ProductDetailPage() {
 
           {/* Stock & category */}
           <div className="flex flex-wrap items-center gap-3">
-            {hasVariants ? (
-              isSelectionComplete ? (
-                selectedVariant ? (
-                  <div className={`flex items-center gap-1.5 text-sm font-medium ${selectedVariantPurchasable ? 'text-emerald-600' : 'text-rose-500'}`}>
-                    {selectedVariantPurchasable ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    {selectedVariantPurchasable ? `Còn hàng (${currentStock})` : 'Sản phẩm đang được đặt trước.'}
-                  </div>
-                ) : isParentMatchingSelection ? (
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Còn hàng ({currentStock})
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-sm font-medium text-rose-500">
-                    <XCircle className="w-4 h-4" />
-                    Sản phẩm đang được đặt trước.
-                  </div>
-                )
-              ) : (
-                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
-                  <XCircle className="w-4 h-4" />
-                  Vui lòng chọn phân loại sản phẩm.
-                </div>
-              )
+            {hasVariants && !isSelectionComplete ? (
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
+                <XCircle className="w-4 h-4" />
+                Vui lòng chọn phân loại sản phẩm.
+              </div>
+            ) : !effectiveStatus ? (
+              <div className="flex items-center gap-1.5 text-sm font-medium text-rose-500">
+                <XCircle className="w-4 h-4" />
+                Sản phẩm hiện không khả dụng.
+              </div>
+            ) : effectiveStatus === 'INACTIVE' ? (
+              <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
+                <XCircle className="w-4 h-4" />
+                Ngừng kinh doanh
+              </div>
+            ) : effectiveStatus === 'OUT_OF_STOCK' ? (
+              <div className="flex items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700">
+                <XCircle className="w-4 h-4" />
+                Sản phẩm sắp về hàng. Bạn có thể đăng ký chờ để nhận thông báo khi hàng về.
+              </div>
             ) : (
-              productStatus === 'INACTIVE' ? (
-                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-500">
-                  <XCircle className="w-4 h-4" />
-                  Ngừng kinh doanh
-                </div>
-              ) : (
-                <div className={`flex items-center gap-1.5 text-sm font-medium ${inStock ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {inStock ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                  {inStock ? `Còn hàng (${currentStock})` : productStatus === 'NEW_ARRIVAL' ? 'Hàng mới về' : 'Hàng sắp về'}
-                </div>
-              )
+              <div className={`flex items-center gap-1.5 text-sm font-medium ${inStock ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {inStock ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                {inStock ? `Còn hàng (${currentStock})` : effectiveStatus === 'NEW_ARRIVAL' ? 'Hàng mới về' : 'Hàng sắp về'}
+              </div>
             )}
             {product.category && (
               <Link
@@ -972,7 +1047,7 @@ export default function ProductDetailPage() {
 
           <div className="mt-auto pt-4 space-y-3">
             {/* Quantity selector */}
-            {canAddToCart && (
+            {canAddToCart && !effectivePreorderable && (
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-slate-600">Số lượng:</span>
                 <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
@@ -1009,23 +1084,94 @@ export default function ProductDetailPage() {
               </div>
             )}
 
+            {canPreorder && (
+              <div className="rounded-2xl border border-orange-200 bg-linear-to-br from-orange-50 via-white to-amber-50 p-4 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-orange-700">Đăng ký chờ hàng</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Điền thông tin bên dưới. Khi hàng về, hệ thống sẽ email cho các khách đã đăng ký theo thứ tự chờ.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-medium text-slate-600">Họ và tên</span>
+                    <input
+                      type="text"
+                      value={preorderForm.customerName}
+                      onChange={(e) => setPreorderForm((prev) => ({ ...prev, customerName: e.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                      placeholder="Nhập họ tên"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-slate-600">Số điện thoại</span>
+                    <input
+                      type="tel"
+                      value={preorderForm.phone}
+                      onChange={(e) => setPreorderForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                      placeholder="0912345678"
+                    />
+                  </label>
+                  <label className="block sm:col-span-2">
+                    <span className="text-xs font-medium text-slate-600">Email</span>
+                    <input
+                      type="email"
+                      value={preorderForm.email}
+                      onChange={(e) => setPreorderForm((prev) => ({ ...prev, email: e.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                      placeholder="you@example.com"
+                    />
+                  </label>
+                  <label className="block sm:max-w-45">
+                    <span className="text-xs font-medium text-slate-600">Số lượng mong muốn</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={preorderForm.desiredQuantity}
+                      onChange={(e) => setPreorderForm((prev) => ({ ...prev, desiredQuantity: e.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
-                onClick={handleAddToCart}
-                disabled={!canAddToCart || addingToCart}
-                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3.5 rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                onClick={canPreorder ? handlePreorderSubmit : handleAddToCart}
+                disabled={canPreorder ? submittingPreorder : (!canAddToCart || addingToCart)}
+                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm ${
+                  canPreorder
+                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
               >
                 <ShoppingCart className="w-4 h-4" />
-                {addingToCart ? 'Đang thêm...' : canAddToCart ? (productStatus === 'OUT_OF_STOCK' ? 'Đặt trước' : 'Thêm vào giỏ hàng') : hasVariants ? 'Thêm vào giỏ hàng' : productStatus === 'INACTIVE' ? 'Ngừng kinh doanh' : productStatus === 'NEW_ARRIVAL' ? 'Hàng mới về' : 'Hàng sắp về'}
+                {canPreorder
+                  ? (submittingPreorder ? 'Đang gửi yêu cầu...' : 'Đặt trước')
+                  : addingToCart
+                    ? 'Đang thêm...'
+                    : canAddToCart
+                      ? 'Thêm vào giỏ hàng'
+                      : hasVariants
+                        ? 'Thêm vào giỏ hàng'
+                        : effectiveStatus === 'INACTIVE'
+                          ? 'Ngừng kinh doanh'
+                          : effectiveStatus === 'NEW_ARRIVAL'
+                            ? 'Hàng mới về'
+                            : 'Hàng sắp về'}
               </button>
-              <button
-                onClick={handleBuyNow}
-                disabled={!canAddToCart || addingToCart}
-                className="flex-1 flex items-center justify-center gap-2 bg-[#e60012] text-white py-3.5 rounded-xl font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
-              >
-                <Zap className="w-4 h-4" />
-                Mua ngay
-              </button>
+              {canBuyNow && (
+                <button
+                  onClick={handleBuyNow}
+                  disabled={!canBuyNow || addingToCart}
+                  className="flex-1 flex items-center justify-center gap-2 bg-[#e60012] text-white py-3.5 rounded-xl font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                >
+                  <Zap className="w-4 h-4" />
+                  Mua ngay
+                </button>
+              )}
             </div>
           </div>
         </div>

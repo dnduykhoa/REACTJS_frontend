@@ -14,6 +14,7 @@ import {
   Monitor,
   Image,
   ShoppingBag,
+  BellRing,
 } from 'lucide-react';
 
 const navLinks = [
@@ -27,6 +28,7 @@ const navLinks = [
   { to: '/admin/users', label: 'Người dùng', icon: Users },
   { to: '/admin/carousel', label: 'Carousel', icon: Image },
   { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingBag },
+  { to: '/admin/preorders', label: 'Chờ hàng', icon: BellRing },
 ];
 
 export default function AdminLayout() {

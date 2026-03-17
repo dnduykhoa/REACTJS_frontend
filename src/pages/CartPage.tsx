@@ -123,6 +123,7 @@ export default function CartPage() {
 
   const getItemStatus = (item: CartItemResponse) => {
     if (item.product.isActive === false || item.product.status === 'INACTIVE') return 'inactive';
+    if (item.preorder) return 'preorder';
     if (!item.inStock) return 'out_of_stock';
     return 'available';
   };
@@ -229,6 +230,10 @@ export default function CartPage() {
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full mt-1">
                       <XCircle className="w-3 h-3" /> Hàng sắp về
                     </span>
+                  ) : getItemStatus(item) === 'preorder' ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full mt-1">
+                      <ShoppingCart className="w-3 h-3" /> Đặt trước
+                    </span>
                   ) : item.availableStock <= 5 ? (
                     <p className="text-xs text-amber-600 font-medium mt-1">Còn {item.availableStock} sản phẩm</p>
                   ) : null}
@@ -245,12 +250,12 @@ export default function CartPage() {
                       >
                         <Minus className="w-3 h-3" />
                       </button>
-                      <span className="px-3 py-1.5 text-sm font-semibold text-slate-800 min-w-[2rem] text-center">
+                      <span className="px-3 py-1.5 text-sm font-semibold text-slate-800 min-w-8 text-center">
                         {isUpdating ? '...' : item.quantity}
                       </span>
                       <button
                         onClick={() => handleUpdateQty(item.id, item.quantity + 1)}
-                        disabled={isUpdating || item.quantity >= item.availableStock || isUnavailable(item)}
+                        disabled={isUpdating || (!item.preorder && item.quantity >= item.availableStock) || isUnavailable(item)}
                         className="px-2.5 py-1.5 hover:bg-slate-100 transition-colors text-slate-600 disabled:opacity-40"
                       >
                         <Plus className="w-3 h-3" />
@@ -295,6 +300,8 @@ export default function CartPage() {
                     <span className="text-xs font-semibold text-slate-500">Ngừng kinh doanh</span>
                   ) : getItemStatus(item) === 'out_of_stock' ? (
                     <span className="text-xs font-semibold text-amber-700">Hàng sắp về</span>
+                  ) : getItemStatus(item) === 'preorder' ? (
+                    <span className="text-xs font-semibold text-indigo-700">Đặt trước</span>
                   ) : (
                     <span className="font-medium text-slate-700">{Number(item.subtotal).toLocaleString('vi-VN')}₫</span>
                   )}

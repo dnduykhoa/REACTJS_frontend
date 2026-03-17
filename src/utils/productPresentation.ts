@@ -50,7 +50,8 @@ function pickNearestAvailableVariant(product: Product): ProductVariant | null {
 }
 
 function toDisplayProduct(product: Product): ProductWithDisplayHint {
-  if (resolveProductStatus(product) === 'ACTIVE') return product;
+  const status = resolveProductStatus(product);
+  if (status !== 'INACTIVE') return product;
 
   const fallbackVariant = pickNearestAvailableVariant(product);
   if (!fallbackVariant) return product;
@@ -80,6 +81,6 @@ export function dedupeDisplayProducts(products: Product[]): ProductWithDisplayHi
   }
 
   return Array.from(byKey.values())
-    .sort((a, b) => getStatusPriority(b) - getStatusPriority(a))
-    .map(toDisplayProduct);
+    .map(toDisplayProduct)
+    .sort((a, b) => getStatusPriority(b) - getStatusPriority(a));
 }

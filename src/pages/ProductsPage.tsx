@@ -104,7 +104,7 @@ export default function ProductsPage() {
         maxPrice: maxP,
         name: name || undefined,
       });
-      setProducts(dedupeDisplayProducts(res.data.data));
+      setProducts(dedupeDisplayProducts(res.data.data).filter((p) => p.status !== 'INACTIVE'));
     };
 
     run().finally(() => setLoading(false));
