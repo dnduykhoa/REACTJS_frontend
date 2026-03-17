@@ -178,13 +178,7 @@ export default function AdminProducts() {
     );
 
     setVariantsByProduct(Object.fromEntries(variantEntries) as Record<number, ProductVariant[]>);
-    setExpandedRows(
-      Object.fromEntries(
-        variantEntries
-          .filter(([, variants]) => variants.length > 0)
-          .map(([productId]) => [productId, true])
-      )
-    );
+    setExpandedRows({});
   };
 
   const loadProducts = async (query = '') => {
@@ -283,32 +277,6 @@ export default function AdminProducts() {
     }
   };
 
-  const handleOutOfStock = async (id: number) => {
-    if (!confirm('Đánh dấu sản phẩm này là hàng sắp về?')) return;
-    setActionId(`product-${id}`);
-    try {
-      await productApi.outOfStock(id);
-      await loadProducts(search);
-    } catch {
-      alert('Thao tác thất bại');
-    } finally {
-      setActionId(null);
-    }
-  };
-
-  const handleNewArrival = async (id: number) => {
-    if (!confirm('Đánh dấu sản phẩm này là hàng mới về?')) return;
-    setActionId(`product-${id}`);
-    try {
-      await productApi.newArrival(id);
-      await loadProducts(search);
-    } catch {
-      alert('Thao tác thất bại');
-    } finally {
-      setActionId(null);
-    }
-  };
-
   const handleVariantUpdate = async (
     productId: number,
     variant: ProductVariant,
@@ -364,7 +332,7 @@ export default function AdminProducts() {
         <select
           value={categoryId}
           onChange={(e) => handleCategoryChange(e.target.value)}
-          className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition min-w-[160px]"
+          className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition min-w-40"
         >
           <option value="all">Tất cả danh mục</option>
           {categoryOptions.map((opt) => (
@@ -478,26 +446,9 @@ export default function AdminProducts() {
                               <Pencil size={14} />
                             </Link>
                             {status === 'ACTIVE' && (
-                              <>
-                                <button
-                                  onClick={() => handleOutOfStock(product.id)}
-                                  disabled={busy}
-                                  className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50"
-                                  title="Đánh dấu hàng sắp về"
-                                >
-                                  <PackageX size={14} />
-                                </button>
-                                <button
-                                  onClick={() => handleNewArrival(product.id)}
-                                  disabled={busy}
-                                  className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-800 hover:bg-indigo-50 transition-colors disabled:opacity-50"
-                                  title="Đánh dấu hàng mới về"
-                                >
-                                  <Package size={14} />
-                                </button>
-                              </>
+                              <></>
                             )}
-                            {(status === 'INACTIVE' || status === 'OUT_OF_STOCK' || status === 'NEW_ARRIVAL') && (
+                            {(status === 'INACTIVE' || status === 'NEW_ARRIVAL') && (
                               <button
                                 onClick={() => handleRestore(product.id)}
                                 disabled={busy}

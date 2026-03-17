@@ -10,3 +10,4 @@ export { productApi, productMediaApi, productSpecApi, productVariantApi } from '
 export { cartApi } from './cartApi';
 export { carouselApi } from './carouselApi';
 export { orderApi } from './orderApi';
+export { preorderApi } from './preorderApi';

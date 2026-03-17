@@ -25,14 +25,16 @@ function resolveStatus(product: Product): ProductStatus {
 
 const STATUS_BADGE: Record<Exclude<ProductStatus, 'ACTIVE'>, { label: string; cls: string }> = {
   NEW_ARRIVAL: { label: 'Hàng mới về', cls: 'bg-emerald-600/80 backdrop-blur-sm text-white' },
-  OUT_OF_STOCK: { label: 'Hàng sắp về', cls: 'bg-slate-900/70 backdrop-blur-sm text-white' },
+  OUT_OF_STOCK: { label: 'Hàng sắp về', cls: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 ring-2 ring-white/80' },
   INACTIVE: { label: 'Ngừng kinh doanh', cls: 'bg-rose-600/80 backdrop-blur-sm text-white' },
 };
 
 export default function ProductCard({ product }: { product: ProductWithDisplayHint }) {
   const imgUrl = getImageUrl(product);
   const status = resolveStatus(product);
-  const purchasable = status === 'ACTIVE' || status === 'NEW_ARRIVAL' || status === 'OUT_OF_STOCK';
+  const canAddDirectly = status === 'ACTIVE' || status === 'NEW_ARRIVAL';
+  const canOpenPreorder = status === 'OUT_OF_STOCK';
+  const purchasable = canAddDirectly || canOpenPreorder;
   const { user } = useAuth();
   const { addToCart } = useCart();
   const navigate = useNavigate();
@@ -46,7 +48,7 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
     e.preventDefault();
     e.stopPropagation();
 
-    if ((product.variants?.length || 0) > 0) {
+    if ((product.variants?.length || 0) > 0 || canOpenPreorder) {
       navigate(detailPath, { state: detailState });
       return;
     }
@@ -68,7 +70,11 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
   };
 
   return (
-    <div className={`group bg-white rounded-xl border border-slate-100 shadow-sm transition-all duration-200 overflow-hidden flex flex-col ${
+    <div className={`group bg-white rounded-xl border shadow-sm transition-all duration-200 overflow-hidden flex flex-col ${
+      status === 'OUT_OF_STOCK'
+        ? 'border-orange-200 bg-gradient-to-b from-orange-50 via-white to-white'
+        : 'border-slate-100'
+    } ${
       !purchasable ? 'opacity-70 grayscale-25' : 'hover:shadow-lg hover:-translate-y-1'
     }`}>
       {/* Image */}
@@ -84,7 +90,7 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
         ) : (
           <Package className="w-14 h-14 text-slate-200" />
         )}
-        {!purchasable && (
+        {status !== 'ACTIVE' && (
           <span className={`absolute top-2 right-2 text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_BADGE[status as Exclude<ProductStatus, 'ACTIVE'>].cls}`}>
             {STATUS_BADGE[status as Exclude<ProductStatus, 'ACTIVE'>].label}
           </span>
@@ -130,8 +136,10 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
             <><CheckCircle2 className="w-3.5 h-3.5" /> Đã thêm</>
           ) : !purchasable ? (
             <><ShoppingCart className="w-3.5 h-3.5" /> {status === 'INACTIVE' ? 'Ngừng kinh doanh' : (status === 'OUT_OF_STOCK' ? 'Hàng sắp về' : 'Không khả dụng')}</>
+          ) : canOpenPreorder ? (
+            <><ShoppingCart className="w-3.5 h-3.5" /> Đăng ký chờ hàng</>
           ) : (
-            <><ShoppingCart className="w-3.5 h-3.5" /> {status === 'OUT_OF_STOCK' ? 'Đặt trước' : (adding ? 'Đang thêm...' : 'Thêm vào giỏ')}</>
+            <><ShoppingCart className="w-3.5 h-3.5" /> {adding ? 'Đang thêm...' : 'Thêm vào giỏ'}</>
           )}
         </button>
       </div>

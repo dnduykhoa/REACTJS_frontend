@@ -268,6 +268,33 @@ export interface Product {
   updatedAt: string;
 }
 
+export type PreorderRequestStatus = 'WAITING' | 'NOTIFIED';
+
+export interface PreorderRegistrationRequest {
+  productId: number;
+  variantId?: number;
+  customerName: string;
+  phone: string;
+  email: string;
+  desiredQuantity: number;
+}
+
+export interface PreorderRequestResponse {
+  id: number;
+  productId: number;
+  productName: string;
+  variantId: number | null;
+  variantName: string | null;
+  customerName: string;
+  phone: string;
+  email: string;
+  desiredQuantity: number;
+  status: PreorderRequestStatus;
+  queuePosition: number | null;
+  createdAt: string;
+  notifiedAt: string | null;
+}
+
 // ─── Order ───────────────────────────────────────────────────────────────────
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'SHIPPING' | 'DELIVERED' | 'CANCELLED';
 
@@ -343,6 +370,7 @@ export interface CartItemResponse {
   subtotal: number;
   inStock: boolean;
   availableStock: number;
+  preorder: boolean;
 }
 
 export interface CartResponse {
