@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(TOKEN_KEY);
   };
 
-  const isAdmin = user?.roles?.includes('ADMIN') ?? false;
+  const isAdmin = user?.roles?.some((role) => role === 'ADMIN' || role === 'ROLE_ADMIN') ?? false;
 
 
 

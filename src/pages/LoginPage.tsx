@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { Link, useNavigate } from 'react-router-dom';
-import { authApi } from '../api/j2ee';
+import { authApi, getApiErrorMessage, unwrapApiData } from '../api/j2ee';
 import type { LoginResponse, TwoFactorResponse } from '../api/j2ee/types';
 import { useAuth } from '../context/AuthContext';
 import { Monitor, Eye, EyeOff, ShieldCheck } from 'lucide-react';
@@ -21,7 +21,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState('');
 
   const goToHome = (roles: string[]) => {
-    if (roles.includes('ADMIN')) navigate('/admin');
+    if (roles.includes('ADMIN') || roles.includes('ROLE_ADMIN')) navigate('/admin');
     else navigate('/');
   };
 
@@ -31,7 +31,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await authApi.login({ ...form, rememberMe });
-      const data = res.data as LoginResponse | TwoFactorResponse;
+      const data = unwrapApiData<LoginResponse | TwoFactorResponse>(res.data);
 
       if ('requiresTwoFactor' in data && data.requiresTwoFactor) {
         // Backend yêu cầu xác thực 2 bước
@@ -43,10 +43,7 @@ export default function LoginPage() {
         goToHome(loginData.roles || []);
       }
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Sai tên đăng nhập hoặc mật khẩu';
-      setError(msg);
+      setError(getApiErrorMessage(err, 'Sai tên đăng nhập hoặc mật khẩu'));
     } finally {
       setLoading(false);
     }
@@ -57,14 +54,11 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await authApi.verify2FA({ emailOrPhone: twoFactorEmailOrPhone, code: otpValue });
-      const loginData = res.data as LoginResponse;
+      const loginData = unwrapApiData<LoginResponse>(res.data);
       login(loginData, rememberMe);
       goToHome(loginData.roles || []);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Mã xác thực không đúng hoặc đã hết hạn';
-      setError(msg);
+      setError(getApiErrorMessage(err, 'Mã xác thực không đúng hoặc đã hết hạn'));
     } finally {
       setLoading(false);
     }
@@ -184,8 +178,7 @@ export default function LoginPage() {
                       const roles: string[] = res.data.data?.roles || [];
                       goToHome(roles);
                     } catch (err: unknown) {
-                      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Đăng nhập Google thất bại';
-                      setError(msg);
+                      setError(getApiErrorMessage(err, 'Đăng nhập Google thất bại'));
                     } finally {
                       setLoading(false);
                     }

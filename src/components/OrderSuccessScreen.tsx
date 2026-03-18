@@ -94,11 +94,35 @@ export default function OrderSuccessScreen({ order, subtitle, onViewOrders }: Pr
         </div>
 
         {/* Total */}
-        <div className="flex justify-between font-bold text-slate-800 border-t border-slate-100 pt-3">
-          <span>Tổng cộng</span>
-          <span className="text-[#e60012]">
-            {Number(order.totalAmount).toLocaleString('vi-VN')}₫
-          </span>
+        <div className="border-t border-slate-100 pt-3 space-y-2 text-sm">
+          <div className="flex justify-between text-slate-500">
+            <span>Tạm tính</span>
+            <span>{Number(order.originalAmount ?? order.totalAmount).toLocaleString('vi-VN')}₫</span>
+          </div>
+          <div className="flex justify-between text-slate-500">
+            <span>Giảm giá chương trình</span>
+            <span className={(order.saleDiscount ?? 0) > 0 ? 'text-emerald-600 font-medium' : ''}>
+              -{Number(order.saleDiscount ?? 0).toLocaleString('vi-VN')}₫
+            </span>
+          </div>
+          <div className="flex justify-between text-slate-500">
+            <span>Giảm giá voucher</span>
+            <span className={(order.voucherDiscount ?? 0) > 0 ? 'text-emerald-600 font-medium' : ''}>
+              -{Number(order.voucherDiscount ?? 0).toLocaleString('vi-VN')}₫
+            </span>
+          </div>
+          {order.appliedVoucherCode && (
+            <div className="flex justify-between text-slate-500">
+              <span>Mã voucher</span>
+              <span className="font-semibold text-indigo-600">{order.appliedVoucherCode}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-bold text-slate-800 border-t border-slate-100 pt-2">
+            <span>Tổng cộng</span>
+            <span className="text-[#e60012]">
+              {Number(order.totalAmount).toLocaleString('vi-VN')}₫
+            </span>
+          </div>
         </div>
       </div>
 

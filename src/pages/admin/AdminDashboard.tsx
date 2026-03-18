@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { productApi, brandApi, categoryApi, authApi } from '../../api/j2ee';
-import { Package, Building2, Tag, Users, Plus, ArrowRight } from 'lucide-react';
+import { Package, Building2, Tag, Users, Plus, ArrowRight, BadgePercent, Ticket } from 'lucide-react';
 
 interface Stats {
   products: number;
@@ -43,6 +43,8 @@ export default function AdminDashboard() {
     { to: '/admin/brands', label: 'Quản lý thương hiệu', icon: Building2 },
     { to: '/admin/attribute-groups', label: 'Nhóm thuộc tính', icon: Package },
     { to: '/admin/attribute-definitions', label: 'Định nghĩa thuộc tính', icon: Package },
+    { to: '/admin/sale-programs', label: 'Quản lý sale programs', icon: BadgePercent },
+    { to: '/admin/vouchers', label: 'Quản lý vouchers', icon: Ticket },
     { to: '/admin/users', label: 'Quản lý người dùng', icon: Users },
   ];
 

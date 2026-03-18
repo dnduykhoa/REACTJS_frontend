@@ -1,10 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { getApiErrorMessage, saleProgramApi } from '../api/j2ee';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ShoppingCart, Trash2, Plus, Minus, Package, ArrowRight, AlertTriangle, XCircle, Ban } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
-import type { CartItemResponse } from '../api/j2ee/types';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import type { CartItemResponse, SaleProgram } from '../api/j2ee/types';
 import { getProductDetailPath } from '../utils/productSlug';
+import { getBestSaleForProduct, getSalePricing } from '../utils/salePricing';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
 
@@ -31,6 +33,7 @@ export default function CartPage() {
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState('');
+  const [activeSales, setActiveSales] = useState<SaleProgram[]>([]);
 
   // Refs để tránh stale closure trong SSE event handlers
   const fetchCartRef = useRef(fetchCart);
@@ -59,6 +62,13 @@ export default function CartPage() {
 
     return () => { es.close(); };
   }, [user]);
+
+  useEffect(() => {
+    saleProgramApi
+      .getActive()
+      .then((res) => setActiveSales(res.data.data || []))
+      .catch(() => setActiveSales([]));
+  }, []);
 
   if (!user) {
     return (
@@ -111,8 +121,8 @@ export default function CartPage() {
       setRemovingId(itemId);
       setError('');
       await removeCartItem(itemId);
-    } catch {
-      setError('Không thể xóa sản phẩm');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Không thể xóa sản phẩm'));
     } finally {
       setRemovingId(null);
     }
@@ -129,9 +139,41 @@ export default function CartPage() {
   };
 
   const hasUnavailable = cart?.items.some(isUnavailable) ?? false;
+
+  const itemPricingMap = useMemo(() => {
+    const entries = (cart?.items || []).map((item) => {
+      const saleResult = getBestSaleForProduct(item.product.id, item.unitPrice, activeSales, {
+        quantity: item.quantity,
+      });
+      const pricing = getSalePricing(item.unitPrice, item.quantity, saleResult.discountPerUnit);
+
+      return [
+        item.id,
+        {
+          saleName: saleResult.sale?.name || null,
+          originalSubtotal: pricing.originalSubtotal,
+          discountSubtotal: pricing.discountSubtotal,
+          finalSubtotal: pricing.finalSubtotal,
+        },
+      ] as const;
+    });
+
+    return new Map(entries);
+  }, [cart?.items, activeSales]);
+
   const checkoutAmount = cart?.items
     .filter((item) => !isUnavailable(item))
-    .reduce((sum, item) => sum + item.subtotal, 0) ?? 0;
+    .reduce((sum, item) => {
+      const pricing = itemPricingMap.get(item.id);
+      return sum + (pricing?.finalSubtotal ?? item.subtotal);
+    }, 0) ?? 0;
+
+  const totalSaleDiscount = cart?.items
+    .filter((item) => !isUnavailable(item))
+    .reduce((sum, item) => {
+      const pricing = itemPricingMap.get(item.id);
+      return sum + (pricing?.discountSubtotal ?? 0);
+    }, 0) ?? 0;
 
   const handleClear = async () => {
     if (!confirm('Bạn có chắc muốn xóa toàn bộ giỏ hàng?')) return;
@@ -139,8 +181,8 @@ export default function CartPage() {
       setClearing(true);
       setError('');
       await clearCart();
-    } catch {
-      setError('Không thể xóa giỏ hàng');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Không thể xóa giỏ hàng'));
     } finally {
       setClearing(false);
     }
@@ -183,6 +225,8 @@ export default function CartPage() {
             const displayName = item.variantSku || item.product.name;
             const isUpdating = updatingId === item.id;
             const isRemoving = removingId === item.id;
+            const pricing = itemPricingMap.get(item.id);
+            const hasSale = !!pricing && pricing.discountSubtotal > 0;
 
             return (
               <div
@@ -264,11 +308,21 @@ export default function CartPage() {
 
                     {/* Subtotal + remove */}
                     <div className="flex items-center gap-3">
-                      <p className={`text-base font-bold ${
-                        isUnavailable(item) ? 'text-slate-400 line-through' : 'text-indigo-600'
-                      }`}>
-                        {Number(item.subtotal).toLocaleString('vi-VN')}₫
-                      </p>
+                      <div className="text-right">
+                        {hasSale && !isUnavailable(item) && (
+                          <p className="text-xs text-slate-400 line-through">
+                            {Number(pricing.originalSubtotal).toLocaleString('vi-VN')}₫
+                          </p>
+                        )}
+                        <p className={`text-base font-bold ${
+                          isUnavailable(item) ? 'text-slate-400 line-through' : 'text-indigo-600'
+                        }`}>
+                          {Number(pricing?.finalSubtotal ?? item.subtotal).toLocaleString('vi-VN')}₫
+                        </p>
+                        {hasSale && !isUnavailable(item) && (
+                          <p className="text-[11px] text-emerald-600">Giảm theo chương trình</p>
+                        )}
+                      </div>
                       <button
                         onClick={() => handleRemove(item.id)}
                         disabled={isRemoving}
@@ -303,13 +357,28 @@ export default function CartPage() {
                   ) : getItemStatus(item) === 'preorder' ? (
                     <span className="text-xs font-semibold text-indigo-700">Đặt trước</span>
                   ) : (
-                    <span className="font-medium text-slate-700">{Number(item.subtotal).toLocaleString('vi-VN')}₫</span>
+                    <div className="text-right">
+                      {(itemPricingMap.get(item.id)?.discountSubtotal ?? 0) > 0 && (
+                        <p className="text-[11px] text-slate-400 line-through">
+                          {Number(itemPricingMap.get(item.id)?.originalSubtotal ?? item.subtotal).toLocaleString('vi-VN')}₫
+                        </p>
+                      )}
+                      <span className="font-medium text-slate-700">
+                        {Number(itemPricingMap.get(item.id)?.finalSubtotal ?? item.subtotal).toLocaleString('vi-VN')}₫
+                      </span>
+                    </div>
                   )}
                 </div>
               ))}
             </div>
 
             <div className="border-t border-slate-100 pt-3 mb-4">
+              {totalSaleDiscount > 0 && (
+                <div className="flex justify-between text-sm text-slate-500 mb-1">
+                  <span>Giảm giá chương trình</span>
+                  <span className="text-emerald-600 font-medium">-{Number(totalSaleDiscount).toLocaleString('vi-VN')}₫</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-slate-800">
                 <span>Tổng cộng</span>
                 <span className="text-[#e60012] text-lg">{Number(checkoutAmount).toLocaleString('vi-VN')}₫</span>

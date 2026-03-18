@@ -15,6 +15,8 @@ import {
   Image,
   ShoppingBag,
   BellRing,
+  Ticket,
+  BadgePercent,
 } from 'lucide-react';
 
 const navLinks = [
@@ -27,6 +29,8 @@ const navLinks = [
   { to: '/admin/category-attributes', label: 'Thuộc tính DM', icon: Link2 },
   { to: '/admin/users', label: 'Người dùng', icon: Users },
   { to: '/admin/carousel', label: 'Carousel', icon: Image },
+  { to: '/admin/sale-programs', label: 'Sale Programs', icon: BadgePercent },
+  { to: '/admin/vouchers', label: 'Vouchers', icon: Ticket },
   { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingBag },
   { to: '/admin/preorders', label: 'Chờ hàng', icon: BellRing },
 ];

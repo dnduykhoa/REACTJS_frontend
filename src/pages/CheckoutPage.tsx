@@ -2,8 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { orderApi } from '../api/j2ee';
-import type { PaymentMethod, ProductMedia } from '../api/j2ee/types';
+import { getApiErrorMessage, orderApi, saleProgramApi, voucherApi } from '../api/j2ee';
+import type { PaymentMethod, ProductMedia, SaleProgram } from '../api/j2ee/types';
+import { getBestSaleForProduct, getSalePricing } from '../utils/salePricing';
 
 // ─── Buy Now state (truyền từ ProductDetailPage, không dùng giỏ hàng) ─────────
 interface BuyNowState {
@@ -107,6 +108,13 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [voucherCodeInput, setVoucherCodeInput] = useState('');
+  const [appliedVoucherCode, setAppliedVoucherCode] = useState('');
+  const [voucherPreviewDiscount, setVoucherPreviewDiscount] = useState<number>(0);
+  const [voucherNotice, setVoucherNotice] = useState('');
+  const [voucherError, setVoucherError] = useState('');
+  const [validatingVoucher, setValidatingVoucher] = useState(false);
+  const [activeSales, setActiveSales] = useState<SaleProgram[]>([]);
   const [success, setSuccess] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<import('../api/j2ee/types').OrderResponse | null>(null);
 
@@ -117,6 +125,13 @@ export default function CheckoutPage() {
       .then((data: Province[]) => setProvinces(data))
       .catch(() => setProvinces([]))
       .finally(() => setLoadingProvinces(false));
+  }, []);
+
+  useEffect(() => {
+    saleProgramApi
+      .getActive()
+      .then((res) => setActiveSales(res.data.data || []))
+      .catch(() => setActiveSales([]));
   }, []);
 
   // ── Load wards when province changes ────────────────────────────────────
@@ -216,10 +231,86 @@ export default function CheckoutPage() {
   const availableItems = cart?.items.filter(
     (item) => item.inStock && item.product.isActive !== false && item.product.status !== 'INACTIVE'
   ) ?? [];
-  const totalAmount = isBuyNow
+  const baseAmount = isBuyNow
     ? (buyNow!.unitPrice * buyNow!.qty)
     : availableItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+  const buyNowSale = isBuyNow
+    ? getBestSaleForProduct(buyNow!.productId, buyNow!.unitPrice, activeSales, {
+        paymentMethod,
+        orderAmount: baseAmount,
+        quantity: buyNow!.qty,
+      })
+    : null;
+
+  const checkoutItemPricing = !isBuyNow
+    ? new Map(
+        availableItems.map((item) => {
+          const sale = getBestSaleForProduct(item.product.id, item.unitPrice, activeSales, {
+            paymentMethod,
+            orderAmount: baseAmount,
+            quantity: item.quantity,
+          });
+          const pricing = getSalePricing(item.unitPrice, item.quantity, sale.discountPerUnit);
+          return [item.id, pricing] as const;
+        })
+      )
+    : new Map<number, { originalSubtotal: number; discountSubtotal: number; finalSubtotal: number }>();
+
+  const saleDiscountAmount = isBuyNow
+    ? getSalePricing(buyNow!.unitPrice, buyNow!.qty, buyNowSale?.discountPerUnit ?? 0).discountSubtotal
+    : availableItems.reduce((sum, item) => sum + (checkoutItemPricing.get(item.id)?.discountSubtotal ?? 0), 0);
+
+  const totalAmount = Math.max(baseAmount - saleDiscountAmount, 0);
   const itemCount = isBuyNow ? 1 : availableItems.length;
+  const checkoutTotalAmount = Math.max(totalAmount - voucherPreviewDiscount, 0);
+
+  const handleApplyVoucher = async () => {
+    const code = voucherCodeInput.trim().toUpperCase();
+    if (!code) {
+      setAppliedVoucherCode('');
+      setVoucherPreviewDiscount(0);
+      setVoucherNotice('');
+      setVoucherError('Vui lòng nhập mã voucher.');
+      return;
+    }
+
+    setValidatingVoucher(true);
+    setVoucherError('');
+    setVoucherNotice('');
+
+    try {
+      const res = await voucherApi.validate({ code, orderAmount: totalAmount });
+      const payload = res.data.data;
+
+      if (payload?.valid === false) {
+        setAppliedVoucherCode('');
+        setVoucherPreviewDiscount(0);
+        setVoucherNotice('');
+        setVoucherError(payload.message || 'Voucher không hợp lệ.');
+        return;
+      }
+
+      const previewDiscount =
+        typeof payload?.discountAmount === 'number'
+          ? payload.discountAmount
+          : typeof payload?.finalAmount === 'number'
+            ? Math.max(totalAmount - payload.finalAmount, 0)
+            : 0;
+
+      setAppliedVoucherCode(code);
+      setVoucherCodeInput(code);
+      setVoucherPreviewDiscount(previewDiscount);
+      setVoucherNotice(payload?.message || 'Áp dụng voucher thành công.');
+    } catch (err: unknown) {
+      setAppliedVoucherCode('');
+      setVoucherPreviewDiscount(0);
+      setVoucherNotice('');
+      setVoucherError(getApiErrorMessage(err, 'Không thể kiểm tra voucher.'));
+    } finally {
+      setValidatingVoucher(false);
+    }
+  };
 
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent) => {
@@ -255,6 +346,7 @@ export default function CheckoutPage() {
         shippingAddress,
         note: form.note || undefined,
         paymentMethod,
+        voucherCode: (appliedVoucherCode || voucherCodeInput.trim().toUpperCase()) || undefined,
         items: orderItems,
       });
 
@@ -278,8 +370,8 @@ export default function CheckoutPage() {
 
       setPlacedOrder(order);
       setSuccess(true);
-    } catch {
-      setSubmitError('Đặt hàng thất bại. Vui lòng thử lại.');
+    } catch (err: unknown) {
+      setSubmitError(getApiErrorMessage(err, 'Đặt hàng thất bại. Vui lòng thử lại.'));
     } finally {
       setSubmitting(false);
     }
@@ -628,6 +720,12 @@ export default function CheckoutPage() {
                       buyNow!.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
                       buyNow!.media?.find((m) => m.mediaType === 'IMAGE');
                     const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+                    const pricing = getSalePricing(
+                      buyNow!.unitPrice,
+                      buyNow!.qty,
+                      buyNowSale?.discountPerUnit ?? 0
+                    );
+                    const hasSale = pricing.discountSubtotal > 0;
                     return (
                       <div className="flex gap-3 items-start">
                         <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
@@ -641,9 +739,16 @@ export default function CheckoutPage() {
                           <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{buyNow!.productName}</p>
                           <p className="text-xs text-slate-400 mt-0.5">× {buyNow!.qty}</p>
                         </div>
-                        <p className="text-xs font-bold text-indigo-600 shrink-0">
-                          {Number(buyNow!.unitPrice * buyNow!.qty).toLocaleString('vi-VN')}₫
-                        </p>
+                        <div className="text-right shrink-0">
+                          {hasSale && (
+                            <p className="text-[11px] text-slate-400 line-through">
+                              {Number(pricing.originalSubtotal).toLocaleString('vi-VN')}₫
+                            </p>
+                          )}
+                          <p className="text-xs font-bold text-indigo-600">
+                            {Number(pricing.finalSubtotal).toLocaleString('vi-VN')}₫
+                          </p>
+                        </div>
                       </div>
                     );
                   })()
@@ -654,6 +759,8 @@ export default function CheckoutPage() {
                       item.product.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
                       item.product.media?.find((m) => m.mediaType === 'IMAGE');
                     const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+                    const pricing = checkoutItemPricing.get(item.id);
+                    const hasSale = (pricing?.discountSubtotal ?? 0) > 0;
                     return (
                       <div key={item.id} className="flex gap-3 items-start">
                         <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
@@ -667,9 +774,16 @@ export default function CheckoutPage() {
                           <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{item.product.name}</p>
                           <p className="text-xs text-slate-400 mt-0.5">× {item.quantity}</p>
                         </div>
-                        <p className="text-xs font-bold text-indigo-600 shrink-0">
-                          {Number(item.subtotal).toLocaleString('vi-VN')}₫
-                        </p>
+                        <div className="text-right shrink-0">
+                          {hasSale && (
+                            <p className="text-[11px] text-slate-400 line-through">
+                              {Number(pricing?.originalSubtotal ?? item.subtotal).toLocaleString('vi-VN')}₫
+                            </p>
+                          )}
+                          <p className="text-xs font-bold text-indigo-600">
+                            {Number(pricing?.finalSubtotal ?? item.subtotal).toLocaleString('vi-VN')}₫
+                          </p>
+                        </div>
                       </div>
                     );
                   })
@@ -677,9 +791,56 @@ export default function CheckoutPage() {
               </div>
 
               <div className="border-t border-slate-100 pt-3 space-y-2 text-sm">
+                <div className="space-y-2 pb-2">
+                  <label className="block text-xs font-semibold text-slate-600">Mã voucher</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={voucherCodeInput}
+                      onChange={(e) => {
+                        setVoucherCodeInput(e.target.value);
+                        if (appliedVoucherCode && e.target.value.trim().toUpperCase() !== appliedVoucherCode) {
+                          setAppliedVoucherCode('');
+                          setVoucherPreviewDiscount(0);
+                          setVoucherNotice('');
+                        }
+                        setVoucherError('');
+                        setSubmitError('');
+                      }}
+                      placeholder="Nhập mã giảm giá"
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyVoucher}
+                      disabled={validatingVoucher || totalAmount <= 0}
+                      className="px-3 py-2 text-xs font-semibold rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+                    >
+                      {validatingVoucher ? 'Đang kiểm tra...' : 'Áp dụng'}
+                    </button>
+                  </div>
+                  {voucherNotice && (
+                    <p className="text-xs text-emerald-600">{voucherNotice}</p>
+                  )}
+                  {voucherError && (
+                    <p className="text-xs text-rose-600">{voucherError}</p>
+                  )}
+                </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Tạm tính</span>
-                  <span>{Number(totalAmount).toLocaleString('vi-VN')}₫</span>
+                  <span>{Number(baseAmount).toLocaleString('vi-VN')}₫</span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>Giảm giá chương trình</span>
+                  <span className={saleDiscountAmount > 0 ? 'text-emerald-600 font-medium' : ''}>
+                    -{Number(saleDiscountAmount).toLocaleString('vi-VN')}₫
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>Giảm giá voucher</span>
+                  <span className={voucherPreviewDiscount > 0 ? 'text-emerald-600 font-medium' : ''}>
+                    -{Number(voucherPreviewDiscount).toLocaleString('vi-VN')}₫
+                  </span>
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>Phí vận chuyển</span>
@@ -687,7 +848,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between font-bold text-slate-800 pt-2 border-t border-slate-100">
                   <span>Tổng cộng</span>
-                  <span className="text-[#e60012] text-base">{Number(totalAmount).toLocaleString('vi-VN')}₫</span>
+                  <span className="text-[#e60012] text-base">{Number(checkoutTotalAmount).toLocaleString('vi-VN')}₫</span>
                 </div>
               </div>
 
