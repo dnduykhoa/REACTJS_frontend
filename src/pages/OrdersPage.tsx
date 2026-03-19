@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { orderApi } from '../api/j2ee';
+import { getApiErrorMessage, orderApi } from '../api/j2ee';
 import type { OrderResponse, OrderStatus } from '../api/j2ee/types';
 import OrderSuccessScreen from '../components/OrderSuccessScreen';
 import {
@@ -144,6 +144,12 @@ function OrderCard({
                 <span>{order.note}</span>
               </div>
             )}
+            {order.appliedVoucherCode && (
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>Mã voucher: <span className="font-semibold text-indigo-600">{order.appliedVoucherCode}</span></span>
+              </div>
+            )}
           </div>
         )}
 
@@ -170,7 +176,11 @@ function OrderCard({
             )}
           </div>
           <div className="text-right">
-            <p className="text-xs text-slate-400">Tổng tiền</p>
+            {(order.saleDiscount > 0 || order.voucherDiscount > 0) && (
+              <p className="text-xs text-slate-400 line-through">
+                {Number(order.originalAmount ?? order.totalAmount).toLocaleString('vi-VN')}₫
+              </p>
+            )}
             <p className="text-base font-bold text-rose-600">{Number(order.totalAmount).toLocaleString('vi-VN')}₫</p>
           </div>
         </div>
@@ -221,7 +231,7 @@ export default function OrdersPage() {
           setPaymentNotice(`Thanh toán chưa thành công cho đơn ${vnpayOrderCode}. Bạn có thể bấm "Thanh toán lại" trước khi hết hạn.`);
         }
       })
-      .catch(() => setError('Không thể tải danh sách đơn hàng.'))
+      .catch((err: unknown) => setError(getApiErrorMessage(err, 'Không thể tải danh sách đơn hàng.')))
       .finally(() => setLoading(false));
   }, [user, vnpaySuccess, vnpayOrderCode, momoSuccess, momoOrderCode, vnpayFailed, momoFailed]);
 
@@ -252,10 +262,7 @@ export default function OrdersPage() {
       }
       setPaymentNotice('Không lấy được link thanh toán. Vui lòng thử lại.');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Không thể thanh toán lại đơn hàng.';
-      setPaymentNotice(msg);
+      setPaymentNotice(getApiErrorMessage(err, 'Không thể thanh toán lại đơn hàng.'));
     } finally {
       setRetryingOrderId(null);
     }

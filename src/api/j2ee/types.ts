@@ -4,6 +4,8 @@ export interface ApiResponse<T = unknown> {
   data: T;
 }
 
+export type DiscountType = 'PERCENTAGE' | 'FIXED_AMOUNT';
+
 // ─── Auth / User ─────────────────────────────────────────────────────────────
 export interface LoginRequest {
   emailOrPhone: string;
@@ -313,6 +315,7 @@ export interface OrderRequest {
   shippingAddress: string;
   note?: string;
   paymentMethod: PaymentMethod;
+  voucherCode?: string;
   items: OrderItemRequest[];
 }
 
@@ -340,6 +343,10 @@ export interface OrderResponse {
   note: string | null;
   paymentMethod: PaymentMethod;
   status: OrderStatus;
+  originalAmount: number;
+  saleDiscount: number;
+  voucherDiscount: number;
+  appliedVoucherCode?: string | null;
   totalAmount: number;
   items: OrderItemResponse[];
   createdAt: string;
@@ -349,6 +356,101 @@ export interface OrderResponse {
   vnpayUrl?: string | null;
   momoUrl?: string | null;
   paymentDeadline?: string | null;
+}
+
+// ─── Sale Program ────────────────────────────────────────────────────────────
+export type SaleConditionType = 'PAYMENT_METHOD' | 'MIN_ORDER_AMOUNT' | 'MIN_QUANTITY';
+
+export interface SaleProgramConditionRequest {
+  conditionType: SaleConditionType;
+  conditionValue: string;
+  description?: string;
+}
+
+export interface SaleProgramCondition {
+  id: number;
+  conditionType: SaleConditionType;
+  conditionValue: string;
+  description: string | null;
+}
+
+export interface SaleProgramRequest {
+  name: string;
+  description?: string;
+  discountType: DiscountType;
+  discountValue: number;
+  maxDiscountAmount?: number;
+  startDate: string;
+  endDate: string;
+  isActive?: boolean;
+  productIds?: number[];
+  conditions?: SaleProgramConditionRequest[];
+}
+
+export interface SaleProgram {
+  id: number;
+  name: string;
+  description: string | null;
+  discountType: DiscountType;
+  discountValue: number;
+  maxDiscountAmount: number | null;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  productIds: number[];
+  conditions: SaleProgramCondition[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ─── Voucher ────────────────────────────────────────────────────────────────
+export type VoucherType = 'SINGLE_USE' | 'MULTI_USE';
+
+export interface VoucherRequest {
+  code: string;
+  name: string;
+  description?: string;
+  discountType: DiscountType;
+  discountValue: number;
+  maxDiscountAmount?: number;
+  minOrderAmount?: number;
+  voucherType: VoucherType;
+  maxUsageCount?: number;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
+}
+
+export interface Voucher {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  discountType: DiscountType;
+  discountValue: number;
+  maxDiscountAmount: number | null;
+  minOrderAmount: number | null;
+  voucherType: VoucherType;
+  maxUsageCount: number | null;
+  usageCount?: number;
+  startDate: string | null;
+  endDate: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VoucherValidateRequest {
+  code: string;
+  orderAmount?: number;
+}
+
+export interface VoucherValidateResponse {
+  code?: string;
+  valid?: boolean;
+  discountAmount?: number;
+  finalAmount?: number;
+  message?: string;
 }
 
 // ─── Cart ─────────────────────────────────────────────────────────────────────

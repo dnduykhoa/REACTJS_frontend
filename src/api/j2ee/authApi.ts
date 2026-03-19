@@ -19,10 +19,10 @@ export const authApi = {
     apiClient.post<ApiResponse<LoginResponse>>('/api/auth/register', data),
 
   login: (data: LoginRequest) =>
-    apiClient.post<LoginResponse | TwoFactorResponse>('/api/auth/login', data),
+    apiClient.post<ApiResponse<LoginResponse | TwoFactorResponse>>('/api/auth/login', data),
 
   verify2FA: (data: Verify2FARequest) =>
-    apiClient.post<LoginResponse>('/api/auth/verify-2fa', data),
+    apiClient.post<ApiResponse<LoginResponse>>('/api/auth/verify-2fa', data),
 
   loginWithGoogle: (data: GoogleLoginRequest) =>
     apiClient.post<ApiResponse<LoginResponse>>('/api/auth/google', data),

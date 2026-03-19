@@ -26,7 +26,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401) {
+    const requestUrl = String(error?.config?.url || '');
+    const shouldIgnore401Logout =
+      requestUrl.includes('/api/admin/sales') ||
+      requestUrl.includes('/api/admin/vouchers') ||
+      requestUrl.includes('/api/sale-programs') ||
+      requestUrl.includes('/api/vouchers');
+
+    if (error?.response?.status === 401 && !shouldIgnore401Logout) {
       localStorage.removeItem('j2ee_user');
       localStorage.removeItem('j2ee_token');
       sessionStorage.removeItem('j2ee_user');

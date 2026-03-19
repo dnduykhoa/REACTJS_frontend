@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { orderApi } from '../../api/j2ee';
+import { getApiErrorMessage, orderApi } from '../../api/j2ee';
 import type { OrderResponse, OrderStatus } from '../../api/j2ee/types';
 import {
   ShoppingBag,
@@ -118,9 +118,9 @@ export default function AdminOrders() {
       .catch((err: unknown) => {
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 403) {
-          setLoadError('Bạn không có quyền truy cập trang đơn hàng quản trị.');
+          setLoadError(getApiErrorMessage(err, 'Bạn không có quyền truy cập trang đơn hàng quản trị.'));
         } else {
-          setLoadError('Không thể tải danh sách đơn hàng. Vui lòng thử lại.');
+          setLoadError(getApiErrorMessage(err, 'Không thể tải danh sách đơn hàng. Vui lòng thử lại.'));
         }
         setOrders([]);
       })
@@ -176,10 +176,7 @@ export default function AdminOrders() {
       setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
       setDetail(updated);
     } catch (err: unknown) {
-      setStatusError(
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-          'Cập nhật thất bại'
-      );
+      setStatusError(getApiErrorMessage(err, 'Cập nhật thất bại'));
     } finally {
       setStatusUpdating(false);
     }
@@ -199,10 +196,7 @@ export default function AdminOrders() {
       setDetail(updated);
       setCancelModalOpen(false);
     } catch (err: unknown) {
-      setStatusError(
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-          'Huỷ đơn thất bại'
-      );
+      setStatusError(getApiErrorMessage(err, 'Huỷ đơn thất bại'));
     } finally {
       setStatusUpdating(false);
     }
@@ -599,9 +593,33 @@ export default function AdminOrders() {
               </div>
 
               {/* Total */}
-              <div className="flex justify-between items-center border-t border-slate-100 pt-4">
-                <span className="text-sm text-slate-500">Tổng cộng</span>
-                <span className="text-xl font-bold text-[#e60012]">{fmtMoney(detail.totalAmount)}</span>
+              <div className="border-t border-slate-100 pt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-500">Tạm tính</span>
+                  <span className="text-sm text-slate-700">{fmtMoney(detail.originalAmount ?? detail.totalAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-500">Giảm giá chương trình</span>
+                  <span className={`text-sm ${(detail.saleDiscount ?? 0) > 0 ? 'text-emerald-600 font-medium' : 'text-slate-700'}`}>
+                    -{fmtMoney(detail.saleDiscount ?? 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-slate-500">Giảm giá voucher</span>
+                  <span className={`text-sm ${(detail.voucherDiscount ?? 0) > 0 ? 'text-emerald-600 font-medium' : 'text-slate-700'}`}>
+                    -{fmtMoney(detail.voucherDiscount ?? 0)}
+                  </span>
+                </div>
+                {detail.appliedVoucherCode && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-500">Mã voucher</span>
+                    <span className="text-sm font-semibold text-indigo-600">{detail.appliedVoucherCode}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center border-t border-slate-100 pt-3">
+                  <span className="text-sm text-slate-500">Tổng cộng</span>
+                  <span className="text-xl font-bold text-[#e60012]">{fmtMoney(detail.totalAmount)}</span>
+                </div>
               </div>
             </div>
           </div>

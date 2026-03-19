@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { orderApi } from '../api/j2ee';
+import { getApiErrorMessage, orderApi } from '../api/j2ee';
 import type { OrderResponse, OrderStatus } from '../api/j2ee/types';
 import {
   ArrowLeft, Package, MapPin, Phone, CreditCard,
@@ -95,7 +95,7 @@ export default function OrderDetailPage() {
     orderApi
       .getOrderById(Number(id))
       .then((res) => setOrder(res.data.data))
-      .catch(() => setError('Không tìm thấy đơn hàng.'))
+      .catch((err: unknown) => setError(getApiErrorMessage(err, 'Không tìm thấy đơn hàng.')))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -157,10 +157,7 @@ export default function OrderDetailPage() {
       }
       setRetryError('Không lấy được link thanh toán. Vui lòng thử lại.');
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Không thể thanh toán lại đơn hàng.';
-      setRetryError(msg);
+      setRetryError(getApiErrorMessage(err, 'Không thể thanh toán lại đơn hàng.'));
     } finally {
       setRetryingPayment(false);
     }
@@ -178,10 +175,7 @@ export default function OrderDetailPage() {
       setCancelSuccess(true);
       setShowCancelModal(false);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        'Không thể huỷ đơn hàng. Vui lòng thử lại.';
-      setCancelError(msg);
+      setCancelError(getApiErrorMessage(err, 'Không thể huỷ đơn hàng. Vui lòng thử lại.'));
     } finally {
       setCancelling(false);
     }
@@ -361,8 +355,26 @@ export default function OrderDetailPage() {
           <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-sm">
             <div className="flex justify-between text-slate-500">
               <span>Tạm tính</span>
-              <span>{Number(order.totalAmount).toLocaleString('vi-VN')}₫</span>
+              <span>{Number(order.originalAmount ?? order.totalAmount).toLocaleString('vi-VN')}₫</span>
             </div>
+            <div className="flex justify-between text-slate-500">
+              <span>Giảm giá chương trình</span>
+              <span className={(order.saleDiscount ?? 0) > 0 ? 'text-emerald-600 font-medium' : ''}>
+                -{Number(order.saleDiscount ?? 0).toLocaleString('vi-VN')}₫
+              </span>
+            </div>
+            <div className="flex justify-between text-slate-500">
+              <span>Giảm giá voucher</span>
+              <span className={(order.voucherDiscount ?? 0) > 0 ? 'text-emerald-600 font-medium' : ''}>
+                -{Number(order.voucherDiscount ?? 0).toLocaleString('vi-VN')}₫
+              </span>
+            </div>
+            {order.appliedVoucherCode && (
+              <div className="flex justify-between text-slate-500">
+                <span>Mã voucher</span>
+                <span className="font-semibold text-indigo-600">{order.appliedVoucherCode}</span>
+              </div>
+            )}
             <div className="flex justify-between text-slate-500">
               <span>Phí vận chuyển</span>
               <span className="text-emerald-600 font-medium">Miễn phí</span>
