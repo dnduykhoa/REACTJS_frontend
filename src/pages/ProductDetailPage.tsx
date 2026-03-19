@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { preorderApi, productApi, productVariantApi } from '../api/j2ee';
-import type { Product, ProductMedia, ProductStatus, ProductVariant } from '../api/j2ee/types';
-import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
+import { preorderApi, productApi, productVariantApi, reviewApi } from '../api/j2ee';
+import type { Product, ProductMedia, ProductStatus, ProductVariant, ReviewResponse } from '../api/j2ee/types';
+import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap, Star, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { buildProductSlug, extractProductIdFromSlug } from '../utils/productSlug';
@@ -74,6 +74,25 @@ function formatSpecDisplayValue(
   return rawValue;
 }
 
+function buildVariantDisplayName(productName: string, variant: ProductVariant | null) {
+  if (!variant) return productName;
+  const optionParts = (variant.values || [])
+    .map((value) => {
+      const rawValue = getVariantComparableValue(value);
+      if (!rawValue) return '';
+      const formatted = formatVariantOptionValue(
+        rawValue,
+        value.attributeDefinition?.dataType,
+        value.attributeDefinition?.unit
+      );
+      const label = value.attributeDefinition?.name || value.attrKey;
+      return label ? `${label}: ${formatted}` : formatted;
+    })
+    .filter(Boolean);
+
+  return optionParts.length > 0 ? `${productName} (${optionParts.join(', ')})` : productName;
+}
+
 function resolveProductStatus(product: Product): ProductStatus {
   return product.status ?? (product.isActive ? (product.stockQuantity > 0 ? 'ACTIVE' : 'OUT_OF_STOCK') : 'INACTIVE');
 }
@@ -102,8 +121,13 @@ export default function ProductDetailPage() {
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [hasUserSelectedVariant, setHasUserSelectedVariant] = useState(false);
   const [thumbStartIndex, setThumbStartIndex] = useState(0);
   const [lastManualImageInteractionAt, setLastManualImageInteractionAt] = useState<number | null>(null);
+  const [reviews, setReviews] = useState<ReviewResponse[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const THUMBNAIL_WINDOW_SIZE = 8;
 
@@ -286,6 +310,11 @@ export default function ProductDetailPage() {
   }, [variants, selectedOptions]);
 
   useEffect(() => {
+    // Mỗi lần vào sản phẩm mới thì mặc định hiển thị review của sản phẩm cha.
+    setHasUserSelectedVariant(false);
+  }, [product?.id]);
+
+  useEffect(() => {
     if (!product) return;
 
     setActiveMedia((current) => {
@@ -360,6 +389,17 @@ export default function ProductDetailPage() {
 
     return () => window.clearInterval(timerId);
   }, [images, lastManualImageInteractionAt]);
+
+  useEffect(() => {
+    if (!product) return;
+
+    const variantIdForReviews = hasUserSelectedVariant ? selectedVariant?.id : undefined;
+    setReviewsLoading(true);
+    reviewApi.getProductReviews(product.id, variantIdForReviews)
+      .then((res) => setReviews(res.data.data))
+      .catch(() => setReviews([]))
+      .finally(() => setReviewsLoading(false));
+  }, [product?.id, selectedVariant?.id, hasUserSelectedVariant]);
 
   if (loading) return <Spinner />;
 
@@ -569,6 +609,7 @@ export default function ProductDetailPage() {
   };
 
   const handleOptionSelect = (optionKey: string, optionValue: string) => {
+    setHasUserSelectedVariant(true);
     setSelectedOptions((prev) => {
       const next = { ...prev, [optionKey]: optionValue };
       if (isSelectionValid(next)) return next;
@@ -706,6 +747,11 @@ export default function ProductDetailPage() {
   const canAddToCart = Boolean(effectiveStatus && effectivePurchasable);
   const canBuyNow = canAddToCart;
   const canPreorder = Boolean(effectivePreorderable);
+    const displayedSoldCount = selectedVariant
+      ? (selectedVariant.soldCount ?? 0)
+      : canUseParent
+        ? (product.soldCount ?? 0)
+        : 0;
   const currentStock = selectedVariant
     ? (selectedVariant.stockQuantity ?? 0)
     : canUseParent
@@ -769,6 +815,13 @@ export default function ProductDetailPage() {
       return;
     }
     // Không thêm vào giỏ hàng, truyền thẳng sang checkout qua router state
+    // Ưu tiên media của biến thể nếu có, fallback về media sản phẩm gốc
+    const variantMedia = selectedVariant?.media?.length ? selectedVariant.media : undefined;
+      const variantPrimaryImage =
+        selectedVariant?.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
+        selectedVariant?.media?.find((m) => m.mediaType === 'IMAGE') ||
+        null;
+      const buyNowVariantDisplayName = buildVariantDisplayName(product.name, selectedVariant);
     navigate('/checkout', {
       state: {
         buyNow: {
@@ -776,8 +829,10 @@ export default function ProductDetailPage() {
           variantId: selectedVariant?.id,
           qty,
           productName: displayProductName,
+            variantDisplayName: buyNowVariantDisplayName,
+            variantImageUrl: variantPrimaryImage?.mediaUrl ?? null,
           unitPrice: currentPrice,
-          media: product.media,
+          media: variantMedia ?? product.media,
         },
       },
     });
@@ -840,6 +895,7 @@ export default function ProductDetailPage() {
   };
 
   return (
+    <>
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm text-slate-400 mb-6">
@@ -961,6 +1017,12 @@ export default function ProductDetailPage() {
               {Number(currentPrice).toLocaleString('vi-VN')}₫
             </p>
           </div>
+
+            {displayedSoldCount > 0 && (
+            <p className="text-sm text-slate-500">
+                Đã bán <span className="font-semibold text-slate-700">{displayedSoldCount.toLocaleString('vi-VN')}</span>
+            </p>
+          )}
 
           {hasVariants && (
             <div className="space-y-3 border-t border-slate-100 pt-4">
@@ -1202,6 +1264,220 @@ export default function ProductDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Reviews ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 mt-6">
+        <div className="flex items-center gap-3 mb-5">
+            <h2 className="text-lg font-bold text-slate-800">
+              Đánh giá {hasUserSelectedVariant && selectedVariant ? displayProductName : product.name}
+            </h2>
+        </div>
+
+        {/* Average rating + breakdown */}
+        {reviews.length > 0 && (() => {
+          const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+          const countByStar = [5, 4, 3, 2, 1].map((star) => ({
+            star,
+            count: reviews.filter((r) => r.rating === star).length,
+          }));
+          const allImages = reviews.flatMap((r) => r.imageUrls ?? []);
+          const MAX_VISIBLE = 6;
+          const visibleImages = allImages.slice(0, MAX_VISIBLE);
+          const remaining = allImages.length - MAX_VISIBLE;
+          return (
+            <div className="flex gap-6 mb-6 p-5 bg-slate-50 rounded-2xl">
+              {/* Left: big score */}
+              <div className="flex flex-col items-center justify-center min-w-[90px]">
+                <div className="flex items-end gap-1 leading-none">
+                  <span className="text-5xl font-bold text-slate-800">{avg.toFixed(1)}</span>
+                  <span className="text-lg text-slate-400 mb-1">/5</span>
+                </div>
+                <div className="flex gap-0.5 mt-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`w-4 h-4 ${star <= Math.round(avg) ? 'fill-amber-400 text-amber-400' : 'fill-slate-200 text-slate-200'}`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-1.5">{reviews.length} lượt đánh giá</p>
+              </div>
+
+              {/* Divider */}
+              <div className="w-px bg-slate-200 shrink-0" />
+
+              {/* Middle: breakdown bars */}
+              <div className="flex-1 flex flex-col gap-1.5 justify-center">
+                {countByStar.map(({ star, count }) => (
+                  <div key={star} className="flex items-center gap-2">
+                    <div className="flex items-center gap-0.5 w-16 shrink-0">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-3 h-3 ${s <= star ? 'fill-amber-400 text-amber-400' : 'fill-slate-200 text-slate-200'}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full transition-all"
+                        style={{ width: reviews.length ? `${(count / reviews.length) * 100}%` : '0%' }}
+                      />
+                    </div>
+                    <span className="text-xs text-slate-500 w-5 text-right shrink-0">{count}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: image gallery (only if reviews have images) */}
+              {allImages.length > 0 && (
+                <>
+                  <div className="w-px bg-slate-200 shrink-0" />
+                  <div className="flex flex-col justify-center">
+                    <p className="text-xs text-slate-500 mb-2">Ảnh từ khách hàng ({allImages.length})</p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {visibleImages.map((url, idx) => {
+                        const isLast = idx === MAX_VISIBLE - 1 && remaining > 0;
+                        return (
+                          <div
+                            key={idx}
+                            className="relative w-14 h-14 shrink-0 cursor-pointer"
+                            onClick={() => { setLightboxImages(allImages.map(resolveUrl)); setLightboxIndex(idx); }}
+                          >
+                            <img
+                              src={resolveUrl(url)}
+                              alt={`ảnh ${idx + 1}`}
+                              className="w-14 h-14 rounded-lg object-cover border border-slate-200 hover:opacity-90 transition-opacity"
+                            />
+                            {isLast && (
+                              <div className="absolute inset-0 bg-black/55 rounded-lg flex flex-col items-center justify-center cursor-pointer">
+                                <span className="text-white text-xs font-bold">+{remaining + 1}</span>
+                                <span className="text-white text-[10px] leading-tight">Xem thêm</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Review list */}
+        {reviewsLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+          </div>
+        ) : reviews.length === 0 ? (
+          <p className="text-slate-400 text-sm text-center py-8">Chưa có đánh giá nào. Hãy mua hàng và chia sẻ cảm nhận của bạn!</p>
+        ) : (
+          <div className="space-y-4">
+            {reviews.map((review) => (
+              <div key={review.id} className="border border-slate-100 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                      <span className="text-indigo-600 text-xs font-bold">
+                        {review.username.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-slate-700">{review.username}</span>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+                        <span className="text-xs text-green-600 font-medium">Đã mua tại TechStore</span>
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {new Date(review.createdAt).toLocaleDateString('vi-VN', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                    })}
+                  </span>
+                </div>
+                <div className="flex gap-0.5 mb-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`w-4 h-4 ${star <= review.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200 fill-slate-200'}`}
+                    />
+                  ))}
+                </div>
+                {review.comment && (
+                  <p className="text-sm text-slate-600">{review.comment}</p>
+                )}
+                {review.imageUrls && review.imageUrls.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {review.imageUrls.map((url, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => { setLightboxImages(review.imageUrls!.map(resolveUrl)); setLightboxIndex(idx); }}
+                        className="p-0 border-0 bg-transparent cursor-pointer"
+                      >
+                        <img
+                          src={resolveUrl(url)}
+                          alt={`ảnh đánh giá ${idx + 1}`}
+                          className="w-16 h-16 rounded-lg object-cover border border-slate-200 hover:opacity-90 transition-opacity"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
+
+    {/* Lightbox Modal */}
+    {lightboxImages.length > 0 && (
+      <div
+        className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+        onClick={() => setLightboxImages([])}
+      >
+        <button
+          className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-1.5 hover:bg-black/60 transition"
+          onClick={() => setLightboxImages([])}
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {lightboxImages.length > 1 && (
+          <button
+            className="absolute left-4 text-white bg-black/40 rounded-full p-1.5 hover:bg-black/60 transition"
+            onClick={(e) => { e.stopPropagation(); setLightboxIndex((lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length); }}
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+        )}
+
+        <img
+          src={lightboxImages[lightboxIndex]}
+          alt={`ảnh ${lightboxIndex + 1}`}
+          className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        />
+
+        {lightboxImages.length > 1 && (
+          <button
+            className="absolute right-4 text-white bg-black/40 rounded-full p-1.5 hover:bg-black/60 transition"
+            onClick={(e) => { e.stopPropagation(); setLightboxIndex((lightboxIndex + 1) % lightboxImages.length); }}
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        )}
+
+        {lightboxImages.length > 1 && (
+          <div className="absolute bottom-4 text-white text-sm bg-black/40 px-3 py-1 rounded-full">
+            {lightboxIndex + 1} / {lightboxImages.length}
+          </div>
+        )}
+      </div>
+    )}
+    </>
   );
 }

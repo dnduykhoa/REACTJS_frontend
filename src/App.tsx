@@ -33,6 +33,7 @@ import AdminOrders from './pages/admin/AdminOrders';
 import AdminPreorders from './pages/admin/AdminPreorders';
 import AdminSalePrograms from './pages/admin/AdminSalePrograms';
 import AdminVouchers from './pages/admin/AdminVouchers';
+import AdminReviews from './pages/admin/AdminReviews';
 
 export default function App() {
   return (
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="vouchers" element={<AdminVouchers />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="preorders" element={<AdminPreorders />} />
+            <Route path="reviews" element={<AdminReviews />} />
           </Route>
         </Routes>
         </CartProvider>

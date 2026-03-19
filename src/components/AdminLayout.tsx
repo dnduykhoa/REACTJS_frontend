@@ -17,22 +17,24 @@ import {
   BellRing,
   Ticket,
   BadgePercent,
+  Star,
 } from 'lucide-react';
 
 const navLinks = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/admin/products', label: 'Sản phẩm', icon: Package },
-  { to: '/admin/categories', label: 'Danh mục', icon: Tag },
-  { to: '/admin/brands', label: 'Thương hiệu', icon: Building2 },
-  { to: '/admin/attribute-groups', label: 'Nhóm thuộc tính', icon: Layers },
-  { to: '/admin/attribute-definitions', label: 'Thuộc tính', icon: Sliders },
-  { to: '/admin/category-attributes', label: 'Thuộc tính DM', icon: Link2 },
-  { to: '/admin/users', label: 'Người dùng', icon: Users },
-  { to: '/admin/carousel', label: 'Carousel', icon: Image },
-  { to: '/admin/sale-programs', label: 'Sale Programs', icon: BadgePercent },
-  { to: '/admin/vouchers', label: 'Vouchers', icon: Ticket },
-  { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingBag },
-  { to: '/admin/preorders', label: 'Chờ hàng', icon: BellRing },
+  { to: '/admin',                       label: 'Dashboard',        icon: LayoutDashboard, exact: true },
+  { to: '/admin/products',              label: 'Sản phẩm',         icon: Package },
+  { to: '/admin/categories',            label: 'Danh mục',         icon: Tag },
+  { to: '/admin/brands',                label: 'Thương hiệu',      icon: Building2 },
+  { to: '/admin/attribute-groups',      label: 'Nhóm thuộc tính',  icon: Layers },
+  { to: '/admin/attribute-definitions', label: 'Thuộc tính',       icon: Sliders },
+  { to: '/admin/category-attributes',   label: 'Thuộc tính DM',    icon: Link2 },
+  { to: '/admin/users',                 label: 'Người dùng',       icon: Users },
+  { to: '/admin/carousel',              label: 'Carousel',         icon: Image },
+  { to: '/admin/sale-programs',         label: 'Sale Programs',    icon: BadgePercent },
+  { to: '/admin/vouchers',              label: 'Vouchers',         icon: Ticket },
+  { to: '/admin/orders',                label: 'Đơn hàng',         icon: ShoppingBag },
+  { to: '/admin/preorders',             label: 'Chờ hàng',         icon: BellRing },
+  { to: '/admin/reviews',               label: 'Đánh giá',         icon: Star },
 ];
 
 export default function AdminLayout() {

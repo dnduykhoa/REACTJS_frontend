@@ -559,36 +559,37 @@ export default function AdminOrders() {
                   Sản phẩm ({detail.items.length})
                 </p>
                 <div className="space-y-2">
-                  {detail.items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 border border-slate-100 rounded-xl p-3">
-                      {item.productImageUrl ? (
-                        <img
-                          src={item.productImageUrl.startsWith('http')
-                            ? item.productImageUrl
-                            : `${import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080'}${item.productImageUrl}`}
-                          alt={item.productName}
-                          className="w-12 h-12 object-cover rounded-lg bg-slate-100 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                          <Package size={18} className="text-slate-300" />
+                  {detail.items.map((item) => {
+                    const displayName = item.variantDisplayName || item.variantName || item.variantSku || item.productName;
+                    const displayImageUrl = item.displayImageUrl || item.imageUrl || item.productImageUrl;
+                    return (
+                      <div key={item.id} className="flex items-center gap-3 border border-slate-100 rounded-xl p-3">
+                        {displayImageUrl ? (
+                          <img
+                            src={displayImageUrl.startsWith('http')
+                              ? displayImageUrl
+                              : `${import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080'}${displayImageUrl}`}
+                            alt={displayName}
+                            className="w-12 h-12 object-cover rounded-lg bg-slate-100 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                            <Package size={18} className="text-slate-300" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800 truncate">{displayName}</p>
+                          {item.variantOptions && item.variantOptions.length > 0 && (
+                            <p className="text-xs text-slate-500 truncate">{item.variantOptions.join(' · ')}</p>
+                          )}
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800 truncate">{item.productName}</p>
-                        {item.variantOptions && item.variantOptions.length > 0 && (
-                          <p className="text-xs text-slate-500 truncate">{item.variantOptions.join(' · ')}</p>
-                        )}
-                        {item.variantSku && (
-                          <p className="text-xs text-slate-400">Tên biến thể: {item.variantSku}</p>
-                        )}
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-semibold text-slate-800">{fmtMoney(item.subtotal)}</p>
+                          <p className="text-xs text-slate-400">{fmtMoney(item.unitPrice)} × {item.quantity}</p>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-semibold text-slate-800">{fmtMoney(item.subtotal)}</p>
-                        <p className="text-xs text-slate-400">{fmtMoney(item.unitPrice)} × {item.quantity}</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

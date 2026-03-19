@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getApiErrorMessage, orderApi } from '../api/j2ee';
+import { getApiErrorMessage, orderApi, reviewApi } from '../api/j2ee';
 import type { OrderResponse, OrderStatus } from '../api/j2ee/types';
 import OrderSuccessScreen from '../components/OrderSuccessScreen';
 import {
   Package, ChevronDown, ChevronUp, ShoppingBag,
   MapPin, Phone, CreditCard, FileText, Clock,
-  XCircle, RefreshCw,
+  XCircle, RefreshCw, CheckCircle2, Star,
 } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
@@ -51,6 +51,75 @@ function formatDeadline(iso?: string | null) {
   });
 }
 
+const STAR_LABELS = ['', 'Rất tệ', 'Tệ', 'Bình thường', 'Tốt', 'Xuất sắc'];
+
+function QuickStarRating({
+  orderItemId,
+  onSuccess,
+}: {
+  orderItemId: number;
+  onSuccess: () => void;
+}) {
+  const [hovered, setHovered] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
+
+  const handleRate = async (star: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError(false);
+    try {
+      await reviewApi.submitReview({ orderItemId, rating: star });
+      onSuccess();
+    } catch {
+      setSubmitError(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="flex items-center gap-0.5 mt-1.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="text-[11px] text-slate-400 mr-1 leading-none select-none shrink-0">
+        Đánh giá:
+      </span>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={submitting}
+          onMouseEnter={() => !submitting && setHovered(star)}
+          onMouseLeave={() => setHovered(0)}
+          onClick={(e) => handleRate(star, e)}
+          className={`p-0.5 ${submitting ? 'cursor-wait opacity-40' : 'cursor-pointer'}`}
+          title={STAR_LABELS[star]}
+        >
+          <Star
+            className={`w-3.5 h-3.5 transition-colors duration-100 ${
+              star <= hovered
+                ? 'fill-amber-400 text-amber-400'
+                : 'fill-slate-200 text-slate-200'
+            }`}
+          />
+        </button>
+      ))}
+      <span className="text-[11px] text-amber-500 ml-1 leading-none select-none w-[54px] shrink-0">
+        {STAR_LABELS[hovered]}
+      </span>
+      {submitting && (
+        <div className="w-3 h-3 border border-amber-300 border-t-amber-500 rounded-full animate-spin shrink-0" />
+      )}
+      {submitError && (
+        <span className="text-[11px] text-rose-400 leading-none shrink-0">Thử lại</span>
+      )}
+    </div>
+  );
+}
+
 function OrderCard({
   order,
   onClick,
@@ -58,6 +127,7 @@ function OrderCard({
   remainingText,
   retrying,
   onRetryPayment,
+  onReviewSuccess,
 }: {
   order: OrderResponse;
   onClick: () => void;
@@ -65,9 +135,11 @@ function OrderCard({
   remainingText: string;
   retrying: boolean;
   onRetryPayment: () => void;
+  onReviewSuccess: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const status = STATUS_CONFIG[order.status] ?? { label: order.status, color: 'bg-slate-100 text-slate-600' };
+  const isDelivered = order.status === 'DELIVERED';
 
   return (
     <div
@@ -90,13 +162,16 @@ function OrderCard({
       {/* Items preview */}
       <div className="px-5 py-4">
         <div className="space-y-2">
-          {order.items.slice(0, expanded ? undefined : 2).map((item) => (
-            <div key={item.id} className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
-                {item.productImageUrl ? (
+          {order.items.slice(0, expanded ? undefined : 2).map((item) => {
+            const displayName = item.variantDisplayName || item.variantName || item.variantSku || item.productName;
+            const displayImageUrl = item.displayImageUrl || item.imageUrl || item.productImageUrl;
+            return (
+              <div key={item.id} className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden mt-0.5">
+                  {displayImageUrl ? (
                   <img
-                    src={item.productImageUrl.startsWith('http') ? item.productImageUrl : `${BASE_URL}${item.productImageUrl}`}
-                    alt={item.productName}
+                      src={displayImageUrl.startsWith('http') ? displayImageUrl : `${BASE_URL}${displayImageUrl}`}
+                      alt={displayName}
                     className="object-contain w-full h-full p-0.5"
                   />
                 ) : (
@@ -104,14 +179,28 @@ function OrderCard({
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-700 truncate">{item.productName}</p>
+                  <p className="text-sm text-slate-700 truncate">{displayName}</p>
                 <p className="text-xs text-slate-400">× {item.quantity}</p>
+                {isDelivered && (
+                  item.reviewed ? (
+                    <span
+                      className="inline-flex items-center gap-1 mt-1.5 text-[11px] text-emerald-600 font-medium"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <CheckCircle2 className="w-3 h-3" />
+                      Đã đánh giá
+                    </span>
+                  ) : (
+                    <QuickStarRating orderItemId={item.id} onSuccess={onReviewSuccess} />
+                  )
+                )}
               </div>
-              <span className="text-sm font-semibold text-black shrink-0">
+              <span className="text-sm font-semibold text-black shrink-0 mt-0.5">
                 {Number(item.subtotal).toLocaleString('vi-VN')}₫
               </span>
             </div>
-          ))}
+            );
+          })}
           {!expanded && order.items.length > 2 && (
             <p className="text-xs text-slate-400">... và {order.items.length - 2} sản phẩm khác</p>
           )}
@@ -213,7 +302,7 @@ export default function OrdersPage() {
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
+  const fetchOrders = () => {
     if (!user) return;
     orderApi.getMyOrders()
       .then((res) => {
@@ -233,6 +322,11 @@ export default function OrdersPage() {
       })
       .catch((err: unknown) => setError(getApiErrorMessage(err, 'Không thể tải danh sách đơn hàng.')))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, vnpaySuccess, vnpayOrderCode, momoSuccess, momoOrderCode, vnpayFailed, momoFailed]);
 
   const getRemainingMs = (order: OrderResponse) => {
@@ -266,6 +360,11 @@ export default function OrdersPage() {
     } finally {
       setRetryingOrderId(null);
     }
+  };
+
+  const handleReviewSuccess = () => {
+    setLoading(true);
+    fetchOrders();
   };
 
   if (!user) {
@@ -392,6 +491,7 @@ export default function OrdersPage() {
               remainingText={formatRemaining(getRemainingMs(order))}
               retrying={retryingOrderId === order.id}
               onRetryPayment={() => handleRetryPayment(order)}
+              onReviewSuccess={handleReviewSuccess}
             />
           ))}
         </div>

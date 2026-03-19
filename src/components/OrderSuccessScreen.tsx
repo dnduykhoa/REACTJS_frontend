@@ -46,17 +46,20 @@ export default function OrderSuccessScreen({ order, subtitle, onViewOrders }: Pr
 
         {/* Items */}
         <div className="border-t border-slate-100 pt-3 space-y-3">
-          {order.items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3">
+            {order.items.map((item) => {
+              const displayName = item.variantDisplayName || item.variantName || item.variantSku || item.productName;
+              const displayImageUrl = item.displayImageUrl || item.imageUrl || item.productImageUrl;
+              return (
+              <div key={item.id} className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
-                {item.productImageUrl ? (
+                  {displayImageUrl ? (
                   <img
                     src={
-                      item.productImageUrl.startsWith('http')
-                        ? item.productImageUrl
-                        : `${BASE_URL}${item.productImageUrl}`
+                        displayImageUrl.startsWith('http')
+                          ? displayImageUrl
+                          : `${BASE_URL}${displayImageUrl}`
                     }
-                    alt={item.productName}
+                      alt={displayName}
                     className="object-contain w-full h-full p-0.5"
                   />
                 ) : (
@@ -64,7 +67,7 @@ export default function OrderSuccessScreen({ order, subtitle, onViewOrders }: Pr
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-slate-700 truncate font-medium">{item.productName}</p>
+                  <p className="text-sm text-slate-700 truncate font-medium">{displayName}</p>
                 <p className="text-xs text-slate-400">
                   × {item.quantity} &nbsp;&bull;&nbsp;{' '}
                   {Number(item.unitPrice).toLocaleString('vi-VN')}₫
@@ -74,7 +77,8 @@ export default function OrderSuccessScreen({ order, subtitle, onViewOrders }: Pr
                 {Number(item.subtotal).toLocaleString('vi-VN')}₫
               </span>
             </div>
-          ))}
+              );
+            })}
         </div>
 
         {/* Shipping / payment info */}

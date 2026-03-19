@@ -12,6 +12,8 @@ interface BuyNowState {
   variantId?: number;
   qty: number;
   productName: string;
+  variantDisplayName?: string;
+  variantImageUrl?: string | null;
   unitPrice: number;
   media?: ProductMedia[];
 }
@@ -716,10 +718,13 @@ export default function CheckoutPage() {
                 {isBuyNow ? (
                   // ── Buy Now: hiển thị 1 sản phẩm duy nhất ──────────────
                   (() => {
-                    const imgMedia =
-                      buyNow!.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
-                      buyNow!.media?.find((m) => m.mediaType === 'IMAGE');
-                    const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+                      const imgMedia =
+                        buyNow!.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
+                        buyNow!.media?.find((m) => m.mediaType === 'IMAGE');
+                      const imgUrl = buyNow!.variantImageUrl
+                        ? resolveUrl(buyNow!.variantImageUrl)
+                        : imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+                      const displayName = buyNow!.variantDisplayName || buyNow!.productName;
                     const pricing = getSalePricing(
                       buyNow!.unitPrice,
                       buyNow!.qty,
@@ -730,13 +735,13 @@ export default function CheckoutPage() {
                       <div className="flex gap-3 items-start">
                         <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
                           {imgUrl ? (
-                            <img src={imgUrl} alt={buyNow!.productName} className="object-contain w-full h-full p-0.5" />
+                              <img src={imgUrl} alt={displayName} className="object-contain w-full h-full p-0.5" />
                           ) : (
                             <Package className="w-5 h-5 text-slate-200" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{buyNow!.productName}</p>
+                            <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{displayName}</p>
                           <p className="text-xs text-slate-400 mt-0.5">× {buyNow!.qty}</p>
                         </div>
                         <div className="text-right shrink-0">
@@ -755,23 +760,34 @@ export default function CheckoutPage() {
                 ) : (
                   // ── Checkout từ giỏ hàng ────────────────────────────────
                   availableItems.map((item) => {
-                    const imgMedia =
+                    const fallbackMedia =
                       item.product.media?.find((m) => m.isPrimary && m.mediaType === 'IMAGE') ||
                       item.product.media?.find((m) => m.mediaType === 'IMAGE');
-                    const imgUrl = imgMedia ? resolveUrl(imgMedia.mediaUrl) : null;
+                      const imgUrl = item.displayImageUrl
+                        ? resolveUrl(item.displayImageUrl)
+                        : item.imageUrl
+                          ? resolveUrl(item.imageUrl)
+                          : item.variantImageUrl
+                            ? resolveUrl(item.variantImageUrl)
+                      : fallbackMedia ? resolveUrl(fallbackMedia.mediaUrl) : null;
+                      const displayName =
+                        item.variantDisplayName ||
+                        item.variantName ||
+                        item.variantSku ||
+                        item.product.name;
                     const pricing = checkoutItemPricing.get(item.id);
                     const hasSale = (pricing?.discountSubtotal ?? 0) > 0;
                     return (
                       <div key={item.id} className="flex gap-3 items-start">
                         <div className="w-12 h-12 rounded-lg border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
                           {imgUrl ? (
-                            <img src={imgUrl} alt={item.product.name} className="object-contain w-full h-full p-0.5" />
+                            <img src={imgUrl} alt={displayName} className="object-contain w-full h-full p-0.5" />
                           ) : (
                             <Package className="w-5 h-5 text-slate-200" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{item.product.name}</p>
+                          <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{displayName}</p>
                           <p className="text-xs text-slate-400 mt-0.5">× {item.quantity}</p>
                         </div>
                         <div className="text-right shrink-0">
