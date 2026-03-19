@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { preorderApi, productApi, productVariantApi } from '../api/j2ee';
-import type { Product, ProductMedia, ProductStatus, ProductVariant } from '../api/j2ee/types';
+import { preorderApi, productApi, productQuestionApi, productVariantApi } from '../api/j2ee';
+import type { Product, ProductMedia, ProductQuestionResponse, ProductStatus, ProductVariant } from '../api/j2ee/types';
 import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -101,6 +101,11 @@ export default function ProductDetailPage() {
     desiredQuantity: '1',
   });
   const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [questions, setQuestions] = useState<ProductQuestionResponse[]>([]);
+  const [questionInput, setQuestionInput] = useState('');
+  const [questionError, setQuestionError] = useState('');
+  const [submittingQuestion, setSubmittingQuestion] = useState(false);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [thumbStartIndex, setThumbStartIndex] = useState(0);
@@ -146,10 +151,12 @@ export default function ProductDetailPage() {
     Promise.all([
       productApi.getById(productId),
       productVariantApi.getByProduct(productId, true).catch(() => null),
+      productQuestionApi.getByProduct(productId).catch(() => null),
     ])
-      .then(([res, variantRes]) => {
+      .then(([res, variantRes, questionRes]) => {
         const p = res.data.data as Product;
         setProduct(p);
+        setQuestions(questionRes?.data?.data || []);
 
         const canonicalSlug = buildProductSlug(p);
         if (slug !== canonicalSlug) {
@@ -214,6 +221,57 @@ export default function ProductDetailPage() {
       .catch(() => setError('Không tìm thấy sản phẩm'))
       .finally(() => setLoading(false));
   }, [slug, navigate, displayVariantId]);
+
+  const reloadQuestions = async (productId: number) => {
+    try {
+      setLoadingQuestions(true);
+      const response = await productQuestionApi.getByProduct(productId);
+      setQuestions(response.data.data || []);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
+  const handleSubmitQuestion = async () => {
+    if (!product) return;
+
+    const content = questionInput.trim();
+    if (!content) {
+      setQuestionError('Vui lòng nhập nội dung câu hỏi');
+      return;
+    }
+
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    setQuestionError('');
+    setSubmittingQuestion(true);
+    try {
+      await productQuestionApi.create(product.id, { question: content });
+      setQuestionInput('');
+      await reloadQuestions(product.id);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setQuestionError(message || 'Không thể gửi câu hỏi');
+    } finally {
+      setSubmittingQuestion(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!location.hash) return;
+    const elementId = location.hash.replace('#', '');
+    const timer = window.setTimeout(() => {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [location.hash, questions.length]);
 
   useEffect(() => {
     setPreorderForm((prev) => ({
@@ -1162,6 +1220,73 @@ export default function ProductDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 mt-6" id="product-qna">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-800">Hỏi đáp về sản phẩm</h2>
+          {loadingQuestions && <span className="text-xs text-slate-400">Đang tải...</span>}
+        </div>
+
+        {!isBackofficeUser && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <textarea
+              value={questionInput}
+              onChange={(event) => setQuestionInput(event.target.value)}
+              placeholder={user ? 'Nhập câu hỏi của bạn về sản phẩm...' : 'Đăng nhập để đặt câu hỏi về sản phẩm...'}
+              className="w-full min-h-24 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            />
+            {questionError && <p className="text-sm text-rose-600">{questionError}</p>}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleSubmitQuestion}
+                disabled={submittingQuestion}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingQuestion ? 'Đang gửi...' : 'Gửi câu hỏi'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 space-y-4">
+          {questions.length === 0 ? (
+            <p className="text-sm text-slate-500">Chưa có câu hỏi nào cho sản phẩm này.</p>
+          ) : (
+            questions.map((item) => {
+              const isOwnQuestion = user?.userId === item.customerId;
+              return (
+                <div
+                  key={item.id}
+                  id={`qna-${item.id}`}
+                  className="rounded-xl border border-slate-200 bg-white p-4 scroll-mt-24"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-800">{item.customerName}</p>
+                    <p className="text-xs text-slate-400">
+                      {new Date(item.askedAt).toLocaleString('vi-VN')}
+                    </p>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-700 whitespace-pre-line">{item.question}</p>
+
+                  {item.answered ? (
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-emerald-700">
+                        Staff phản hồi{item.answeredByName ? ` (${item.answeredByName})` : ''}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-700 whitespace-pre-line">{item.answer}</p>
+                    </div>
+                  ) : (
+                    isOwnQuestion && (
+                      <p className="mt-3 text-xs font-medium text-amber-700">Câu hỏi của bạn đang chờ staff phản hồi.</p>
+                    )
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }

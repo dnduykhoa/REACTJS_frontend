@@ -4,6 +4,7 @@ import { CartProvider } from './context/CartContext';
 import MainLayout from './components/MainLayout';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import WebNotificationCenter from './components/WebNotificationCenter';
 
 // Public pages
 import HomePage from './pages/HomePage';
@@ -34,12 +35,14 @@ import AdminOrders from './pages/admin/AdminOrders';
 import AdminPreorders from './pages/admin/AdminPreorders';
 import AdminSalePrograms from './pages/admin/AdminSalePrograms';
 import AdminVouchers from './pages/admin/AdminVouchers';
+import AdminProductQuestions from './pages/admin/AdminProductQuestions';
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <CartProvider>
+        <WebNotificationCenter />
         <Routes>
           {/* Public routes */}
           <Route element={<MainLayout />}>
@@ -70,6 +73,7 @@ export default function App() {
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
             <Route path="category-attributes" element={<AdminCategoryAttributes />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="product-questions" element={<AdminProductQuestions />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />
             <Route path="vouchers" element={<AdminVouchers />} />
@@ -90,6 +94,7 @@ export default function App() {
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
             <Route path="category-attributes" element={<AdminCategoryAttributes />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="product-questions" element={<AdminProductQuestions />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />
             <Route path="vouchers" element={<AdminVouchers />} />
@@ -110,6 +115,7 @@ export default function App() {
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
             <Route path="category-attributes" element={<AdminCategoryAttributes />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="product-questions" element={<AdminProductQuestions />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />
             <Route path="vouchers" element={<AdminVouchers />} />

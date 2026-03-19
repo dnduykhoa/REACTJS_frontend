@@ -17,6 +17,7 @@ import {
   BellRing,
   Ticket,
   BadgePercent,
+  MessageCircleQuestion,
 } from 'lucide-react';
 
 type AdminNavLink = {
@@ -32,6 +33,7 @@ const navLinkTemplates: Omit<AdminNavLink, 'to'>[] = [
   { label: 'Sản phẩm', icon: Package, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { label: 'Đơn hàng', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { label: 'Chờ hàng', icon: BellRing, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { label: 'Hỏi đáp SP', icon: MessageCircleQuestion, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { label: 'Người dùng', icon: Users, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { label: 'Danh mục', icon: Tag, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Thương hiệu', icon: Building2, roles: ['ADMIN', 'MANAGER'] },
@@ -48,6 +50,7 @@ const routePaths = [
   'products',
   'orders',
   'preorders',
+  'product-questions',
   'users',
   'categories',
   'brands',
@@ -63,7 +66,7 @@ const routeRules = [
   // /admin, /manager, /staff base paths
   { pattern: /^\/(?:admin|manager|staff)$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   // Products, orders, preorders, users accessible to all backoffice roles
-  { pattern: /^\/(?:admin|manager|staff)\/(products|orders|preorders|users)(\/.*)?$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { pattern: /^\/(?:admin|manager|staff)\/(products|orders|preorders|product-questions|users)(\/.*)?$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   // Management features only for Admin/Manager
   {
     pattern: /^\/(?:admin|manager|staff)\/(categories|brands|attribute-groups|attribute-definitions|category-attributes|carousel|sale-programs|vouchers)(\/.*)?$/,
