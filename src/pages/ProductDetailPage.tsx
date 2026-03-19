@@ -83,7 +83,8 @@ export default function ProductDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const displayVariantId: number | null = (location.state as { displayVariantId?: number | null } | null)?.displayVariantId ?? null;
-  const { user } = useAuth();
+  const { user, canAccessAdmin } = useAuth();
+  const isBackofficeUser = canAccessAdmin; // Admin, Manager, or Staff
   const { addToCart } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1093,42 +1094,45 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            <div className="flex gap-3">
-              <button
-                onClick={canPreorder ? handlePreorderSubmit : handleAddToCart}
-                disabled={canPreorder ? submittingPreorder : (!canAddToCart || addingToCart)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm ${
-                  canPreorder
-                    ? 'bg-orange-500 text-white hover:bg-orange-600'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                }`}
-              >
-                <ShoppingCart className="w-4 h-4" />
-                {canPreorder
-                  ? (submittingPreorder ? 'Đang gửi yêu cầu...' : 'Đặt trước')
-                  : addingToCart
-                    ? 'Đang thêm...'
-                    : canAddToCart
-                      ? 'Thêm vào giỏ hàng'
-                      : hasVariants
-                        ? 'Thêm vào giỏ hàng'
-                        : effectiveStatus === 'INACTIVE'
-                          ? 'Ngừng kinh doanh'
-                          : effectiveStatus === 'NEW_ARRIVAL'
-                            ? 'Hàng mới về'
-                            : 'Hàng sắp về'}
-              </button>
-              {canBuyNow && (
+            {/* Add to cart & Buy now buttons - Hidden for backoffice users */}
+            {!isBackofficeUser && (
+              <div className="flex gap-3">
                 <button
-                  onClick={handleBuyNow}
-                  disabled={!canBuyNow || addingToCart}
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#e60012] text-white py-3.5 rounded-xl font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  onClick={canPreorder ? handlePreorderSubmit : handleAddToCart}
+                  disabled={canPreorder ? submittingPreorder : (!canAddToCart || addingToCart)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm ${
+                    canPreorder
+                      ? 'bg-orange-500 text-white hover:bg-orange-600'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
                 >
-                  <Zap className="w-4 h-4" />
-                  Mua ngay
+                  <ShoppingCart className="w-4 h-4" />
+                  {canPreorder
+                    ? (submittingPreorder ? 'Đang gửi yêu cầu...' : 'Đặt trước')
+                    : addingToCart
+                      ? 'Đang thêm...'
+                      : canAddToCart
+                        ? 'Thêm vào giỏ hàng'
+                        : hasVariants
+                          ? 'Thêm vào giỏ hàng'
+                          : effectiveStatus === 'INACTIVE'
+                            ? 'Ngừng kinh doanh'
+                            : effectiveStatus === 'NEW_ARRIVAL'
+                              ? 'Hàng mới về'
+                              : 'Hàng sắp về'}
                 </button>
-              )}
-            </div>
+                {canBuyNow && (
+                  <button
+                    onClick={handleBuyNow}
+                    disabled={!canBuyNow || addingToCart}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#e60012] text-white py-3.5 rounded-xl font-semibold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  >
+                    <Zap className="w-4 h-4" />
+                    Mua ngay
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

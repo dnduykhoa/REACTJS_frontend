@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { productApi, brandApi, categoryApi, authApi } from '../../api/j2ee';
-import { Package, Building2, Tag, Users, Plus, ArrowRight, BadgePercent, Ticket } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { Package, Building2, Tag, Users, Plus, ArrowRight, BadgePercent, Ticket, BellRing, ShoppingBag } from 'lucide-react';
 
 interface Stats {
   products: number;
@@ -11,16 +12,20 @@ interface Stats {
 }
 
 export default function AdminDashboard() {
+  const { isAdmin, isManager, isStaff } = useAuth();
   const [stats, setStats] = useState<Stats>({ products: 0, brands: 0, categories: 0, users: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.allSettled([
+    const requests = [
       productApi.getAll(),
       brandApi.getAll(),
       categoryApi.getAll(),
       authApi.getAllUsers(),
-    ]).then(([p, b, c, u]) => {
+    ];
+
+    // Staff don't need brand/category data, but we fetch for consistency
+    Promise.allSettled(requests).then(([p, b, c, u]) => {
       setStats({
         products: p.status === 'fulfilled' ? (p.value.data.data?.length ?? 0) : 0,
         brands:   b.status === 'fulfilled' ? (b.value.data.data?.length ?? 0) : 0,
@@ -30,29 +35,60 @@ export default function AdminDashboard() {
     }).finally(() => setLoading(false));
   }, []);
 
-  const cards = [
-    { label: 'Sản phẩm', value: stats.products, to: '/admin/products', icon: Package, bg: 'bg-indigo-50', iconColor: 'text-indigo-600', border: 'border-indigo-100' },
-    { label: 'Thương hiệu', value: stats.brands, to: '/admin/brands', icon: Building2, bg: 'bg-violet-50', iconColor: 'text-violet-600', border: 'border-violet-100' },
-    { label: 'Danh mục', value: stats.categories, to: '/admin/categories', icon: Tag, bg: 'bg-emerald-50', iconColor: 'text-emerald-600', border: 'border-emerald-100' },
-    { label: 'Người dùng', value: stats.users, to: '/admin/users', icon: Users, bg: 'bg-amber-50', iconColor: 'text-amber-600', border: 'border-amber-100' },
+  // Role-based stat cards
+  const allCards = [
+    { label: 'Sản phẩm', value: stats.products, to: '/admin/products', icon: Package, bg: 'bg-indigo-50', iconColor: 'text-indigo-600', border: 'border-indigo-100', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { label: 'Thương hiệu', value: stats.brands, to: '/admin/brands', icon: Building2, bg: 'bg-violet-50', iconColor: 'text-violet-600', border: 'border-violet-100', roles: ['ADMIN', 'MANAGER'] },
+    { label: 'Danh mục', value: stats.categories, to: '/admin/categories', icon: Tag, bg: 'bg-emerald-50', iconColor: 'text-emerald-600', border: 'border-emerald-100', roles: ['ADMIN', 'MANAGER'] },
+    { label: 'Người dùng', value: stats.users, to: '/admin/users', icon: Users, bg: 'bg-amber-50', iconColor: 'text-amber-600', border: 'border-amber-100', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   ];
 
-  const quickLinks = [
-    { to: '/admin/products/new', label: 'Thêm sản phẩm mới', icon: Plus },
-    { to: '/admin/categories', label: 'Quản lý danh mục', icon: Tag },
-    { to: '/admin/brands', label: 'Quản lý thương hiệu', icon: Building2 },
-    { to: '/admin/attribute-groups', label: 'Nhóm thuộc tính', icon: Package },
-    { to: '/admin/attribute-definitions', label: 'Định nghĩa thuộc tính', icon: Package },
-    { to: '/admin/sale-programs', label: 'Quản lý sale programs', icon: BadgePercent },
-    { to: '/admin/vouchers', label: 'Quản lý vouchers', icon: Ticket },
-    { to: '/admin/users', label: 'Quản lý người dùng', icon: Users },
+  const currentRoles = [
+    ...(isAdmin ? ['ADMIN'] : []),
+    ...(isManager ? ['MANAGER'] : []),
+    ...(isStaff ? ['STAFF'] : []),
   ];
+
+  const cards = allCards.filter((card) => card.roles.some((role) => currentRoles.includes(role)));
+
+  const allQuickLinks = [
+    { to: '/admin/products/new', label: 'Thêm sản phẩm mới', icon: Plus, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: '/admin/products', label: 'Quản lý sản phẩm', icon: Package, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: '/admin/orders', label: 'Quản lý đơn hàng', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: '/admin/preorders', label: 'Quản lý chờ hàng', icon: BellRing, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: '/admin/users', label: 'Quản lý người dùng', icon: Users, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: '/admin/categories', label: 'Quản lý danh mục', icon: Tag, roles: ['ADMIN', 'MANAGER'] },
+    { to: '/admin/brands', label: 'Quản lý thương hiệu', icon: Building2, roles: ['ADMIN', 'MANAGER'] },
+    { to: '/admin/attribute-groups', label: 'Nhóm thuộc tính', icon: Package, roles: ['ADMIN', 'MANAGER'] },
+    { to: '/admin/attribute-definitions', label: 'Định nghĩa thuộc tính', icon: Package, roles: ['ADMIN', 'MANAGER'] },
+    { to: '/admin/sale-programs', label: 'Quản lý sale programs', icon: BadgePercent, roles: ['ADMIN', 'MANAGER'] },
+    { to: '/admin/vouchers', label: 'Quản lý vouchers', icon: Ticket, roles: ['ADMIN', 'MANAGER'] },
+  ];
+
+  const quickLinks = allQuickLinks.filter((link) => link.roles.some((role) => currentRoles.includes(role)));
+
+  // Get role badge info
+  const getRoleBadge = () => {
+    if (isAdmin) return { label: 'Admin', color: 'bg-red-100 text-red-800' };
+    if (isManager) return { label: 'Manager', color: 'bg-blue-100 text-blue-800' };
+    if (isStaff) return { label: 'Staff', color: 'bg-green-100 text-green-800' };
+    return null;
+  };
+
+  const roleBadge = getRoleBadge();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Tổng quan hệ thống</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Tổng quan hệ thống</p>
+        </div>
+        {roleBadge && (
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${roleBadge.color}`}>
+            {roleBadge.label}
+          </span>
+        )}
       </div>
 
       {loading ? (

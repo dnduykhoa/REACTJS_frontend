@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import MainLayout from './components/MainLayout';
 import AdminLayout from './components/AdminLayout';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Public pages
 import HomePage from './pages/HomePage';
@@ -50,14 +51,54 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/profile/:id" element={<ProfilePage />} />
             <Route path="/profile/:id/change-password" element={<ChangePasswordPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/cart" element={<ProtectedRoute customersOnly><CartPage /></ProtectedRoute>} />
+            <Route path="/checkout" element={<ProtectedRoute customersOnly><CheckoutPage /></ProtectedRoute>} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
           </Route>
 
-          {/* Admin routes */}
+          {/* Admin routes - /admin for Admin role */}
           <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="products" element={<AdminProducts />} />
+            <Route path="products/new" element={<AdminProductForm />} />
+            <Route path="products/:id/edit" element={<AdminProductForm />} />
+            <Route path="products/:id/variants/:variantId/edit" element={<AdminProductForm />} />
+            <Route path="categories" element={<AdminCategories />} />
+            <Route path="brands" element={<AdminBrands />} />
+            <Route path="attribute-groups" element={<AdminAttributeGroups />} />
+            <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
+            <Route path="category-attributes" element={<AdminCategoryAttributes />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="carousel" element={<AdminCarousel />} />
+            <Route path="sale-programs" element={<AdminSalePrograms />} />
+            <Route path="vouchers" element={<AdminVouchers />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="preorders" element={<AdminPreorders />} />
+          </Route>
+
+          {/* Manager routes - /manager for Manager role */}
+          <Route path="/manager" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="products" element={<AdminProducts />} />
+            <Route path="products/new" element={<AdminProductForm />} />
+            <Route path="products/:id/edit" element={<AdminProductForm />} />
+            <Route path="products/:id/variants/:variantId/edit" element={<AdminProductForm />} />
+            <Route path="categories" element={<AdminCategories />} />
+            <Route path="brands" element={<AdminBrands />} />
+            <Route path="attribute-groups" element={<AdminAttributeGroups />} />
+            <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
+            <Route path="category-attributes" element={<AdminCategoryAttributes />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="carousel" element={<AdminCarousel />} />
+            <Route path="sale-programs" element={<AdminSalePrograms />} />
+            <Route path="vouchers" element={<AdminVouchers />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="preorders" element={<AdminPreorders />} />
+          </Route>
+
+          {/* Staff routes - /staff for Staff role */}
+          <Route path="/staff" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="products" element={<AdminProducts />} />
             <Route path="products/new" element={<AdminProductForm />} />

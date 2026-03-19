@@ -21,8 +21,18 @@ export default function LoginPage() {
   const [otp, setOtp] = useState('');
 
   const goToHome = (roles: string[]) => {
-    if (roles.includes('ADMIN') || roles.includes('ROLE_ADMIN')) navigate('/admin');
-    else navigate('/');
+    const normalized = roles.map((role) => role.replace(/^ROLE_/, '').toUpperCase());
+    
+    // Redirect to role-specific panel
+    if (normalized.includes('ADMIN')) {
+      navigate('/admin');
+    } else if (normalized.includes('MANAGER')) {
+      navigate('/manager');
+    } else if (normalized.includes('STAFF')) {
+      navigate('/staff');
+    } else {
+      navigate('/');
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {

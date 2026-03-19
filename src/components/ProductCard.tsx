@@ -35,7 +35,8 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
   const canAddDirectly = status === 'ACTIVE' || status === 'NEW_ARRIVAL';
   const canOpenPreorder = status === 'OUT_OF_STOCK';
   const purchasable = canAddDirectly || canOpenPreorder;
-  const { user } = useAuth();
+  const { user, canAccessAdmin } = useAuth();
+  const isBackofficeUser = canAccessAdmin; // Admin, Manager, or Staff
   const { addToCart } = useCart();
   const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
@@ -120,28 +121,30 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
           )}
         </div>
 
-        {/* Add to cart button */}
-        <button
-          onClick={handleAddToCart}
-          disabled={!purchasable || adding}
-          className={`mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors
-            ${added
-              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-              : !purchasable
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600'
-            }`}
-        >
-          {added ? (
-            <><CheckCircle2 className="w-3.5 h-3.5" /> Đã thêm</>
-          ) : !purchasable ? (
-            <><ShoppingCart className="w-3.5 h-3.5" /> {status === 'INACTIVE' ? 'Ngừng kinh doanh' : (status === 'OUT_OF_STOCK' ? 'Hàng sắp về' : 'Không khả dụng')}</>
-          ) : canOpenPreorder ? (
-            <><ShoppingCart className="w-3.5 h-3.5" /> Đăng ký chờ hàng</>
-          ) : (
-            <><ShoppingCart className="w-3.5 h-3.5" /> {adding ? 'Đang thêm...' : 'Thêm vào giỏ'}</>
-          )}
-        </button>
+        {/* Add to cart button - Hidden for backoffice users */}
+        {!isBackofficeUser && (
+          <button
+            onClick={handleAddToCart}
+            disabled={!purchasable || adding}
+            className={`mt-2 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors
+              ${added
+                ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                : !purchasable
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-200 hover:border-indigo-600'
+              }`}
+          >
+            {added ? (
+              <><CheckCircle2 className="w-3.5 h-3.5" /> Đã thêm</>
+            ) : !purchasable ? (
+              <><ShoppingCart className="w-3.5 h-3.5" /> {status === 'INACTIVE' ? 'Ngừng kinh doanh' : (status === 'OUT_OF_STOCK' ? 'Hàng sắp về' : 'Không khả dụng')}</>
+            ) : canOpenPreorder ? (
+              <><ShoppingCart className="w-3.5 h-3.5" /> Đăng ký chờ hàng</>
+            ) : (
+              <><ShoppingCart className="w-3.5 h-3.5" /> {adding ? 'Đang thêm...' : 'Thêm vào giỏ'}</>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

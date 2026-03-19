@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { authApi } from '../../api/j2ee';
 import type { UserProfileResponse } from '../../api/j2ee/types';
 import { Users, Search, Shield, X, AlertCircle } from 'lucide-react';
 import Pagination from '../../components/Pagination';
+import { useAuth } from '../../context/AuthContext';
 
 const PAGE_SIZE = 15;
 
 const ALL_ROLES = ['ADMIN', 'MANAGER', 'STAFF', 'USER'];
+const normalizeRole = (role: string) => role.replace(/^ROLE_/, '').toUpperCase();
 
 export default function AdminUsers() {
+  const { isAdmin, isManager, isStaff, canManageUserRoles, canDeleteUsers, canAssignRole } = useAuth();
   const [users, setUsers] = useState<UserProfileResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -18,6 +21,8 @@ export default function AdminUsers() {
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
 
+  const isReadOnlyUserView = isStaff && !isAdmin && !isManager;
+
   const load = () => {
     setLoading(true);
     setPage(1);
@@ -25,6 +30,18 @@ export default function AdminUsers() {
   };
 
   useEffect(load, []);
+
+  const canManageRolesOfTarget = (user: UserProfileResponse) => {
+    if (!canManageUserRoles) return false;
+    if (isAdmin) return true;
+    const targetRoles = user.roles.map(normalizeRole);
+    return !targetRoles.some((role) => role === 'ADMIN' || role === 'MANAGER');
+  };
+
+  const editableRoleOptions = useMemo(
+    () => ALL_ROLES.filter((role) => canAssignRole(role)),
+    [canAssignRole]
+  );
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +52,7 @@ export default function AdminUsers() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!canDeleteUsers) return;
     if (!confirm('Xóa người dùng này?')) return;
     try {
       await authApi.deleteUser(id);
@@ -45,13 +63,28 @@ export default function AdminUsers() {
   };
 
   const openRoleEdit = (user: UserProfileResponse) => {
+    if (!canManageRolesOfTarget(user)) {
+      setError('Bạn không có quyền phân quyền cho tài khoản này');
+      return;
+    }
     setEditingUser(user);
-    setSelectedRoles([...user.roles]);
+    setSelectedRoles([...user.roles.map(normalizeRole)]);
     setError('');
   };
 
   const handleSaveRoles = async () => {
     if (!editingUser) return;
+    if (!canManageRolesOfTarget(editingUser)) {
+      setError('Bạn không có quyền phân quyền cho tài khoản này');
+      return;
+    }
+
+    const invalidRoles = selectedRoles.filter((role) => !canAssignRole(role));
+    if (invalidRoles.length > 0) {
+      setError(`Bạn không thể gán role: ${invalidRoles.join(', ')}`);
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await authApi.updateUserRoles(editingUser.id, selectedRoles);
@@ -65,15 +98,16 @@ export default function AdminUsers() {
   };
 
   const toggleRole = (role: string) => {
+    if (!canAssignRole(role)) return;
     setSelectedRoles((prev) =>
       prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
     );
   };
 
   const roleBadgeClass = (r: string) =>
-    r === 'ADMIN' ? 'bg-rose-100 text-rose-700' :
-    r === 'MANAGER' ? 'bg-amber-100 text-amber-700' :
-    r === 'STAFF' ? 'bg-indigo-100 text-indigo-700' :
+    normalizeRole(r) === 'ADMIN' ? 'bg-rose-100 text-rose-700' :
+    normalizeRole(r) === 'MANAGER' ? 'bg-amber-100 text-amber-700' :
+    normalizeRole(r) === 'STAFF' ? 'bg-indigo-100 text-indigo-700' :
     'bg-slate-100 text-slate-600';
 
   return (
@@ -98,7 +132,6 @@ export default function AdminUsers() {
         <button type="button" onClick={load} className="px-4 py-2 rounded-xl text-sm text-slate-500 hover:bg-slate-100 border border-slate-200 transition">Xóa lọc</button>
       </form>
 
-      {/* Role edit modal */}
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-sm">
@@ -113,7 +146,7 @@ export default function AdminUsers() {
               </div>
             )}
             <div className="space-y-2">
-              {ALL_ROLES.map((role) => (
+              {editableRoleOptions.map((role) => (
                 <label key={role} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition">
                   <input
                     type="checkbox"
@@ -125,6 +158,9 @@ export default function AdminUsers() {
                 </label>
               ))}
             </div>
+            {!isAdmin && isManager && (
+              <p className="mt-3 text-xs text-amber-700">Manager chỉ được phân quyền USER ↔ STAFF.</p>
+            )}
             <div className="flex gap-2 mt-5">
               <button onClick={handleSaveRoles} disabled={saving} className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 transition">{saving ? 'Đang lưu...' : 'Lưu'}</button>
               <button onClick={() => setEditingUser(null)} className="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-200 transition">Hủy</button>
@@ -165,19 +201,26 @@ export default function AdminUsers() {
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {user.roles.map((r) => (
-                        <span key={r} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${roleBadgeClass(r)}`}>{r}</span>
+                        <span key={r} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${roleBadgeClass(r)}`}>{normalizeRole(r)}</span>
                       ))}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-slate-500 capitalize">{user.provider}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => openRoleEdit(user)} className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Cập nhật vai trò">
-                        <Shield size={14} />
-                      </button>
-                      <button onClick={() => handleDelete(user.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors" title="Xóa">
-                        <X size={14} />
-                      </button>
+                      {canManageRolesOfTarget(user) && (
+                        <button onClick={() => openRoleEdit(user)} className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Cập nhật vai trò">
+                          <Shield size={14} />
+                        </button>
+                      )}
+                      {canDeleteUsers && !isReadOnlyUserView && (
+                        <button onClick={() => handleDelete(user.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors" title="Xóa">
+                          <X size={14} />
+                        </button>
+                      )}
+                      {!canManageRolesOfTarget(user) && (!canDeleteUsers || isReadOnlyUserView) && (
+                        <span className="text-xs text-slate-400">Chỉ xem</span>
+                      )}
                     </div>
                   </td>
                 </tr>

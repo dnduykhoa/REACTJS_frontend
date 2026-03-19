@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { LoginResponse } from '../api/j2ee/types';
 
 interface AuthContextType {
@@ -6,6 +6,13 @@ interface AuthContextType {
   login: (userData: LoginResponse, rememberMe?: boolean) => void;
   logout: () => void;
   isAdmin: boolean;
+  isManager: boolean;
+  isStaff: boolean;
+  canAccessAdmin: boolean;
+  canManageUserRoles: boolean;
+  canDeleteUsers: boolean;
+  hasRole: (roleName: string) => boolean;
+  canAssignRole: (roleName: string) => boolean;
   getToken: () => string | null;
 }
 
@@ -13,6 +20,8 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const STORAGE_KEY = 'j2ee_user';
 const TOKEN_KEY = 'j2ee_token';
+
+const normalizeRole = (role: string) => role.replace(/^ROLE_/, '').toUpperCase();
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<LoginResponse | null>(() => {
@@ -52,12 +61,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(TOKEN_KEY);
   };
 
-  const isAdmin = user?.roles?.some((role) => role === 'ADMIN' || role === 'ROLE_ADMIN') ?? false;
+  const roleSet = useMemo(() => {
+    return new Set((user?.roles || []).map((role) => normalizeRole(role)));
+  }, [user]);
 
+  const hasRole = (roleName: string) => roleSet.has(normalizeRole(roleName));
 
+  const isAdmin = hasRole('ADMIN');
+  const isManager = hasRole('MANAGER');
+  const isStaff = hasRole('STAFF');
+  const canAccessAdmin = isAdmin || isManager || isStaff;
+  const canManageUserRoles = isAdmin || isManager;
+  const canDeleteUsers = isAdmin || isManager;
+
+  const canAssignRole = (roleName: string) => {
+    const normalizedRole = normalizeRole(roleName);
+    if (isAdmin) return true;
+    if (isManager) return normalizedRole === 'USER' || normalizedRole === 'STAFF';
+    return false;
+  };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAdmin, getToken }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        isAdmin,
+        isManager,
+        isStaff,
+        canAccessAdmin,
+        canManageUserRoles,
+        canDeleteUsers,
+        hasRole,
+        canAssignRole,
+        getToken,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

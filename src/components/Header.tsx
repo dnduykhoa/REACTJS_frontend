@@ -5,11 +5,21 @@ import { useState } from 'react';
 import { Monitor, ChevronDown, LogOut, User, Settings, Shield, Menu, X, ShoppingCart, ShoppingBag } from 'lucide-react';
 
 export default function Header() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, canAccessAdmin, isAdmin, isManager, isStaff } = useAuth();
   const { totalItems } = useCart();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Get the correct admin panel path based on role
+  const getAdminPath = () => {
+    if (isAdmin) return '/admin';
+    if (isManager) return '/manager';
+    if (isStaff) return '/staff';
+    return '/admin';
+  };
+
+  const adminPath = getAdminPath();
 
   const handleLogout = () => {
     logout();
@@ -54,8 +64,8 @@ export default function Header() {
 
         {/* User area (desktop) */}
         <div className="hidden md:flex items-center gap-2 shrink-0">
-          {/* Cart icon */}
-          {user && (
+          {/* Cart icon - Hidden for backoffice users */}
+          {user && !canAccessAdmin && (
             <Link
               to="/cart"
               className="relative p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
@@ -91,13 +101,13 @@ export default function Header() {
                       <p className="text-sm font-semibold text-slate-800 truncate">{user.fullName || user.username}</p>
                       <p className="text-xs text-slate-400 truncate">{user.email}</p>
                     </div>
-                    {isAdmin && (
+                    {canAccessAdmin && (
                       <Link
-                        to="/admin"
+                        to={adminPath}
                         onClick={() => setMenuOpen(false)}
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 transition-colors"
                       >
-                        <Shield className="w-4 h-4" /> Admin Panel
+                        <Shield className="w-4 h-4" /> {isAdmin ? 'Admin Panel' : isManager ? 'Manager Panel' : 'Staff Dashboard'}
                       </Link>
                     )}
                     <Link
@@ -168,11 +178,13 @@ export default function Header() {
           <div className="border-t border-slate-100 pt-2 mt-2">
             {user ? (
               <>
-                {isAdmin && <Link to="/admin" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 rounded-lg">Admin Panel</Link>}
-                <Link to="/cart" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">
-                  <ShoppingCart className="w-4 h-4" />
-                  Giỏ hàng {totalItems > 0 && <span className="ml-auto bg-indigo-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{totalItems}</span>}
-                </Link>
+                {canAccessAdmin && <Link to={adminPath} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 rounded-lg">{isAdmin ? 'Admin Panel' : isManager ? 'Manager Panel' : 'Staff Dashboard'}</Link>}
+                {!canAccessAdmin && (
+                  <Link to="/cart" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">
+                    <ShoppingCart className="w-4 h-4" />
+                    Giỏ hàng {totalItems > 0 && <span className="ml-auto bg-indigo-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{totalItems}</span>}
+                  </Link>
+                )}
                 <Link to={`/profile/${user.userId}`} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Hồ sơ của tôi</Link>
                 <Link to="/orders" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"><ShoppingBag className="w-4 h-4" /> Đơn hàng của tôi</Link>
                 <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 rounded-lg">Đăng xuất</button>
