@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { productApi, brandApi, categoryApi, authApi } from '../../api/j2ee';
 import { useAuth } from '../../context/AuthContext';
-import { Package, Building2, Tag, Users, Plus, ArrowRight, BadgePercent, Ticket, BellRing, ShoppingBag } from 'lucide-react';
+import { Package, Building2, Tag, Users, Plus, ArrowRight, BadgePercent, Ticket, BellRing, ShoppingBag, MessageCircleQuestion } from 'lucide-react';
 
 interface Stats {
   products: number;
@@ -13,8 +13,18 @@ interface Stats {
 
 export default function AdminDashboard() {
   const { isAdmin, isManager, isStaff } = useAuth();
+  const location = useLocation();
   const [stats, setStats] = useState<Stats>({ products: 0, brands: 0, categories: 0, users: 0 });
   const [loading, setLoading] = useState(true);
+
+  const basePath = (() => {
+    const matched = location.pathname.match(/^\/(admin|manager|staff)/);
+    if (matched) return `/${matched[1]}`;
+    if (isAdmin) return '/admin';
+    if (isManager) return '/manager';
+    if (isStaff) return '/staff';
+    return '/admin';
+  })();
 
   useEffect(() => {
     const requests = [
@@ -37,10 +47,10 @@ export default function AdminDashboard() {
 
   // Role-based stat cards
   const allCards = [
-    { label: 'Sản phẩm', value: stats.products, to: '/admin/products', icon: Package, bg: 'bg-indigo-50', iconColor: 'text-indigo-600', border: 'border-indigo-100', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { label: 'Thương hiệu', value: stats.brands, to: '/admin/brands', icon: Building2, bg: 'bg-violet-50', iconColor: 'text-violet-600', border: 'border-violet-100', roles: ['ADMIN', 'MANAGER'] },
-    { label: 'Danh mục', value: stats.categories, to: '/admin/categories', icon: Tag, bg: 'bg-emerald-50', iconColor: 'text-emerald-600', border: 'border-emerald-100', roles: ['ADMIN', 'MANAGER'] },
-    { label: 'Người dùng', value: stats.users, to: '/admin/users', icon: Users, bg: 'bg-amber-50', iconColor: 'text-amber-600', border: 'border-amber-100', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { label: 'Sản phẩm', value: stats.products, to: `${basePath}/products`, icon: Package, bg: 'bg-indigo-50', iconColor: 'text-indigo-600', border: 'border-indigo-100', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { label: 'Thương hiệu', value: stats.brands, to: `${basePath}/brands`, icon: Building2, bg: 'bg-violet-50', iconColor: 'text-violet-600', border: 'border-violet-100', roles: ['ADMIN', 'MANAGER'] },
+    { label: 'Danh mục', value: stats.categories, to: `${basePath}/categories`, icon: Tag, bg: 'bg-emerald-50', iconColor: 'text-emerald-600', border: 'border-emerald-100', roles: ['ADMIN', 'MANAGER'] },
+    { label: 'Người dùng', value: stats.users, to: `${basePath}/users`, icon: Users, bg: 'bg-amber-50', iconColor: 'text-amber-600', border: 'border-amber-100', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   ];
 
   const currentRoles = [
@@ -52,17 +62,18 @@ export default function AdminDashboard() {
   const cards = allCards.filter((card) => card.roles.some((role) => currentRoles.includes(role)));
 
   const allQuickLinks = [
-    { to: '/admin/products/new', label: 'Thêm sản phẩm mới', icon: Plus, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { to: '/admin/products', label: 'Quản lý sản phẩm', icon: Package, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { to: '/admin/orders', label: 'Quản lý đơn hàng', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { to: '/admin/preorders', label: 'Quản lý chờ hàng', icon: BellRing, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { to: '/admin/users', label: 'Quản lý người dùng', icon: Users, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-    { to: '/admin/categories', label: 'Quản lý danh mục', icon: Tag, roles: ['ADMIN', 'MANAGER'] },
-    { to: '/admin/brands', label: 'Quản lý thương hiệu', icon: Building2, roles: ['ADMIN', 'MANAGER'] },
-    { to: '/admin/attribute-groups', label: 'Nhóm thuộc tính', icon: Package, roles: ['ADMIN', 'MANAGER'] },
-    { to: '/admin/attribute-definitions', label: 'Định nghĩa thuộc tính', icon: Package, roles: ['ADMIN', 'MANAGER'] },
-    { to: '/admin/sale-programs', label: 'Quản lý sale programs', icon: BadgePercent, roles: ['ADMIN', 'MANAGER'] },
-    { to: '/admin/vouchers', label: 'Quản lý vouchers', icon: Ticket, roles: ['ADMIN', 'MANAGER'] },
+    { to: `${basePath}/products/new`, label: 'Thêm sản phẩm mới', icon: Plus, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: `${basePath}/products`, label: 'Quản lý sản phẩm', icon: Package, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: `${basePath}/orders`, label: 'Quản lý đơn hàng', icon: ShoppingBag, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: `${basePath}/preorders`, label: 'Quản lý chờ hàng', icon: BellRing, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: `${basePath}/product-questions`, label: 'Quản lý hỏi đáp', icon: MessageCircleQuestion, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: `${basePath}/users`, label: 'Quản lý người dùng', icon: Users, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: `${basePath}/categories`, label: 'Quản lý danh mục', icon: Tag, roles: ['ADMIN', 'MANAGER'] },
+    { to: `${basePath}/brands`, label: 'Quản lý thương hiệu', icon: Building2, roles: ['ADMIN', 'MANAGER'] },
+    { to: `${basePath}/attribute-groups`, label: 'Nhóm thuộc tính', icon: Package, roles: ['ADMIN', 'MANAGER'] },
+    { to: `${basePath}/attribute-definitions`, label: 'Định nghĩa thuộc tính', icon: Package, roles: ['ADMIN', 'MANAGER'] },
+    { to: `${basePath}/sale-programs`, label: 'Quản lý sale programs', icon: BadgePercent, roles: ['ADMIN', 'MANAGER'] },
+    { to: `${basePath}/vouchers`, label: 'Quản lý vouchers', icon: Ticket, roles: ['ADMIN', 'MANAGER'] },
   ];
 
   const quickLinks = allQuickLinks.filter((link) => link.roles.some((role) => currentRoles.includes(role)));

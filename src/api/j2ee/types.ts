@@ -482,3 +482,41 @@ export interface CartResponse {
   totalItems: number;
   totalAmount: number;
 }
+
+// ─── Product Q&A ─────────────────────────────────────────────────────────────
+export interface ProductQuestionCreateRequest {
+  question: string;
+}
+
+export interface ProductQuestionAnswerRequest {
+  answer: string;
+}
+
+export interface ProductQuestionResponse {
+  id: number;
+  productId: number;
+  productName: string;
+  customerId: number;
+  customerName: string;
+  question: string;
+  answer: string | null;
+  answered: boolean;
+  askedAt: string;
+  answeredAt: string | null;
+  answeredById: number | null;
+  answeredByName: string | null;
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+export type NotificationType = 'PRODUCT_QA_REPLY';
+
+export interface UserNotificationResponse {
+  id: number;
+  type: NotificationType;
+  title: string;
+  content: string;
+  referenceUrl: string | null;
+  read: boolean;
+  createdAt: string;
+  readAt: string | null;
+}
