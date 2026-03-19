@@ -337,9 +337,11 @@ export default function AdminReviews() {
             {totalPages > 1 && (
               <div className="px-5 py-4 border-t border-slate-100">
                 <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
+                  page={page}
+                  total={totalPages}
+                  onChange={setPage}
+                  pageCount={totalPages}
+                  pageSize={PAGE_SIZE}
                 />
               </div>
             )}
