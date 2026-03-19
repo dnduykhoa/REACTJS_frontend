@@ -18,6 +18,7 @@ import {
   Ticket,
   BadgePercent,
   MessageCircleQuestion,
+  Star,
 } from 'lucide-react';
 
 type AdminNavLink = {
@@ -43,7 +44,7 @@ const navLinkTemplates: Omit<AdminNavLink, 'to'>[] = [
   { label: 'Carousel', icon: Image, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Sale Programs', icon: BadgePercent, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Vouchers', icon: Ticket, roles: ['ADMIN', 'MANAGER'] },
-];
+  { label: 'Đánh giá', icon: Star, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
 
 const routePaths = [
   '',  // Dashboard
@@ -60,13 +61,14 @@ const routePaths = [
   'carousel',
   'sale-programs',
   'vouchers',
+  'reviews',
 ];
 
 const routeRules = [
   // /admin, /manager, /staff base paths
   { pattern: /^\/(?:admin|manager|staff)$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
-  // Products, orders, preorders, users accessible to all backoffice roles
-  { pattern: /^\/(?:admin|manager|staff)\/(products|orders|preorders|product-questions|users)(\/.*)?$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  // Products, orders, preorders, users, reviews accessible to all backoffice roles
+  { pattern: /^\/(?:admin|manager|staff)\/(products|orders|preorders|product-questions|users|reviews)(\/.*)?$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   // Management features only for Admin/Manager
   {
     pattern: /^\/(?:admin|manager|staff)\/(categories|brands|attribute-groups|attribute-definitions|category-attributes|carousel|sale-programs|vouchers)(\/.*)?$/,
