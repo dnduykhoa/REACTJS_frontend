@@ -3,7 +3,7 @@ import { Link, useSearchParams, useLocation, useNavigate } from 'react-router-do
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage, orderApi, saleProgramApi, voucherApi } from '../api/j2ee';
-import type { PaymentMethod, ProductMedia, SaleProgram } from '../api/j2ee/types';
+import type { CartItemResponse, PaymentMethod, ProductMedia, ProductStatus, SaleProgram } from '../api/j2ee/types';
 import { getBestSaleForProduct, getSalePricing } from '../utils/salePricing';
 
 // ─── Buy Now state (truyền từ ProductDetailPage, không dùng giỏ hàng) ─────────
@@ -64,6 +64,19 @@ function resolveUrl(url: string) {
   if (url.startsWith('http')) return url;
   if (url.startsWith('/')) return `${BASE_URL}${url}`;
   return `${BASE_URL}/${url}`;
+}
+
+function resolveCheckoutProductStatus(item: CartItemResponse): ProductStatus {
+  if (item.product.status) return item.product.status;
+  return item.product.stockQuantity > 0 ? 'ACTIVE' : 'OUT_OF_STOCK';
+}
+
+function isCheckoutEligible(item: CartItemResponse): boolean {
+  if (item.variantId != null) {
+    return item.inStock;
+  }
+
+  return item.inStock && resolveCheckoutProductStatus(item) !== 'INACTIVE';
 }
 
 const formatPhone = formatPhoneDisplay;
@@ -228,9 +241,7 @@ export default function CheckoutPage() {
   };
 
   // ── Cart computed values ─────────────────────────────────────────────────
-  const availableItems = cart?.items.filter(
-    (item) => item.inStock && item.product.isActive !== false && item.product.status !== 'INACTIVE'
-  ) ?? [];
+  const availableItems = cart?.items.filter(isCheckoutEligible) ?? [];
   const baseAmount = isBuyNow
     ? (buyNow!.unitPrice * buyNow!.qty)
     : availableItems.reduce((sum, item) => sum + item.subtotal, 0);

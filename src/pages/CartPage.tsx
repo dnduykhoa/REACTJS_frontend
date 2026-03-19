@@ -4,7 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ShoppingCart, Trash2, Plus, Minus, Package, ArrowRight, AlertTriangle, XCircle, Ban } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { CartItemResponse, SaleProgram } from '../api/j2ee/types';
+import type { CartItemResponse, ProductStatus, SaleProgram } from '../api/j2ee/types';
 import { getProductDetailPath } from '../utils/productSlug';
 import { getBestSaleForProduct, getSalePricing } from '../utils/salePricing';
 
@@ -15,6 +15,11 @@ function resolveUrl(url: string) {
   if (url.startsWith('http')) return url;
   if (url.startsWith('/')) return `${BASE_URL}${url}`;
   return `${BASE_URL}/${url}`;
+}
+
+function resolveCartProductStatus(item: CartItemResponse): ProductStatus {
+  if (item.product.status) return item.product.status;
+  return item.product.stockQuantity > 0 ? 'ACTIVE' : 'OUT_OF_STOCK';
 }
 
 function Spinner() {
@@ -70,36 +75,6 @@ export default function CartPage() {
       .catch(() => setActiveSales([]));
   }, []);
 
-  if (!user) {
-    return (
-      <div className="text-center py-24">
-        <ShoppingCart className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-        <p className="text-slate-500 mb-4">Vui lòng đăng nhập để xem giỏ hàng</p>
-        <Link to="/login" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm">
-          Đăng nhập
-        </Link>
-      </div>
-    );
-  }
-
-  if (loading) return <Spinner />;
-
-  if (!cart || cart.items.length === 0) {
-    return (
-      <div className="text-center py-24">
-        <ShoppingCart className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-        <p className="text-slate-500 mb-2 font-medium">Giỏ hàng của bạn đang trống</p>
-        <p className="text-sm text-slate-400 mb-6">Hãy thêm sản phẩm vào giỏ hàng!</p>
-        <Link
-          to="/products"
-          className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm"
-        >
-          Khám phá sản phẩm <ArrowRight className="w-4 h-4" />
-        </Link>
-      </div>
-    );
-  }
-
   const handleUpdateQty = async (itemId: number, newQty: number) => {
     if (newQty < 1) return;
     try {
@@ -128,11 +103,17 @@ export default function CartPage() {
     }
   };
 
-  const isUnavailable = (item: CartItemResponse) =>
-    item.product.isActive === false || item.product.status === 'INACTIVE';
+  const isUnavailable = (item: CartItemResponse) => {
+    if (item.variantId != null) {
+      return !item.preorder && !item.inStock;
+    }
+    return resolveCartProductStatus(item) === 'INACTIVE';
+  };
 
   const getItemStatus = (item: CartItemResponse) => {
-    if (item.product.isActive === false || item.product.status === 'INACTIVE') return 'inactive';
+    if (item.variantId == null && resolveCartProductStatus(item) === 'INACTIVE') {
+      return 'inactive';
+    }
     if (item.preorder) return 'preorder';
     if (!item.inStock) return 'out_of_stock';
     return 'available';
@@ -187,6 +168,36 @@ export default function CartPage() {
       setClearing(false);
     }
   };
+
+  if (!user) {
+    return (
+      <div className="text-center py-24">
+        <ShoppingCart className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+        <p className="text-slate-500 mb-4">Vui lòng đăng nhập để xem giỏ hàng</p>
+        <Link to="/login" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm">
+          Đăng nhập
+        </Link>
+      </div>
+    );
+  }
+
+  if (loading) return <Spinner />;
+
+  if (!cart || cart.items.length === 0) {
+    return (
+      <div className="text-center py-24">
+        <ShoppingCart className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+        <p className="text-slate-500 mb-2 font-medium">Giỏ hàng của bạn đang trống</p>
+        <p className="text-sm text-slate-400 mb-6">Hãy thêm sản phẩm vào giỏ hàng!</p>
+        <Link
+          to="/products"
+          className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-700 transition-colors text-sm"
+        >
+          Khám phá sản phẩm <ArrowRight className="w-4 h-4" />
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">

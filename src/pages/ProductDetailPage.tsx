@@ -113,67 +113,23 @@ export default function ProductDetailPage() {
     return a.id - b.id;
   };
 
-  const allGalleryImages = useMemo(() => {
-    const orderedVariants = [...variants].sort((a, b) => {
-      const orderDiff = (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
-      if (orderDiff !== 0) return orderDiff;
-      return a.id - b.id;
-    });
-
-    const variantImages = orderedVariants.flatMap((variant) =>
-      [...(variant.media || [])]
-        .filter((m) => m.mediaType === 'IMAGE')
-        .sort(mediaSort)
-    );
-
-    const productImages = [...(product?.media || [])]
-      .filter((m) => m.mediaType === 'IMAGE')
-      .sort(mediaSort)
-      .filter((m) => !variantImages.some((variantMedia) => variantMedia.id === m.id));
-
-    return [...productImages, ...variantImages];
-  }, [variants, product]);
+  const parentGalleryImages = useMemo(
+    () => [...(product?.media || [])].filter((m) => m.mediaType === 'IMAGE').sort(mediaSort),
+    [product]
+  );
 
   const selectedVariantImages = useMemo(
     () => [...(selectedVariant?.media || [])].filter((m) => m.mediaType === 'IMAGE').sort(mediaSort),
     [selectedVariant]
   );
 
-  const matchingVariants = useMemo(() => {
-    const activeSelections = Object.entries(selectedOptions).filter(([, value]) => Boolean(value));
-    if (activeSelections.length === 0) {
-      return variants;
-    }
-
-    return variants.filter((variant) =>
-      activeSelections.every(([key, value]) =>
-        variant.values.some((variantValue) => variantValue.attrKey === key && getVariantComparableValue(variantValue) === value)
-      )
-    );
-  }, [variants, selectedOptions]);
-
   const filteredGalleryImages = useMemo(() => {
-    const hasActiveSelections = Object.values(selectedOptions).some((value) => Boolean(value));
-    if (!hasActiveSelections) {
-      return allGalleryImages;
+    if (!selectedVariant) {
+      return parentGalleryImages;
     }
 
-    const variantImages = matchingVariants.flatMap((variant) =>
-      [...(variant.media || [])]
-        .filter((media) => media.mediaType === 'IMAGE')
-        .sort(mediaSort)
-    );
-
-    const dedupedVariantImages = variantImages.filter(
-      (media, index, arr) => arr.findIndex((candidate) => candidate.id === media.id) === index
-    );
-
-    if (dedupedVariantImages.length > 0) {
-      return dedupedVariantImages;
-    }
-
-    return allGalleryImages;
-  }, [allGalleryImages, matchingVariants, selectedOptions]);
+    return selectedVariantImages.length > 0 ? selectedVariantImages : parentGalleryImages;
+  }, [selectedVariant, selectedVariantImages, parentGalleryImages]);
 
   useEffect(() => {
     const productId = extractProductIdFromSlug(slug);
