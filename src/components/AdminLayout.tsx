@@ -45,6 +45,7 @@ const navLinkTemplates: Omit<AdminNavLink, 'to'>[] = [
   { label: 'Sale Programs', icon: BadgePercent, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Vouchers', icon: Ticket, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Đánh giá', icon: Star, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+];
 
 const routePaths = [
   '',  // Dashboard

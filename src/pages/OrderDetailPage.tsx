@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage, orderApi } from '../api/j2ee';
-import type { OrderResponse, OrderStatus } from '../api/j2ee/types';
+import type { OrderItemResponse, OrderResponse, OrderStatus } from '../api/j2ee/types';
 import ReviewModal from '../components/ReviewModal';
 import {
   ArrowLeft, Package, MapPin, Phone, CreditCard,
@@ -57,6 +57,43 @@ function formatRemaining(ms: number) {
   const seconds = totalSec % 60;
   if (hours > 0) return `${hours}giờ ${minutes}phút ${seconds}giây`;
   return `${minutes} phút ${seconds} giây`;
+}
+
+function getOrderItemVariantDetails(item: OrderItemResponse): string {
+  const options = (item.variantOptions || [])
+    .map((option) => option?.trim())
+    .filter((option): option is string => Boolean(option));
+
+  if (options.length > 0) {
+    return options.join(' • ');
+  }
+
+  const productName = item.productName?.trim() || '';
+  const variantDisplayName = item.variantDisplayName?.trim() || '';
+
+  if (variantDisplayName) {
+    if (productName && variantDisplayName.toLowerCase().startsWith(productName.toLowerCase())) {
+      const suffix = variantDisplayName.slice(productName.length).trim();
+      if (suffix.startsWith('(') && suffix.endsWith(')') && suffix.length > 2) {
+        return suffix.slice(1, -1).trim();
+      }
+      if ((suffix.startsWith('-') || suffix.startsWith(':')) && suffix.length > 1) {
+        return suffix.slice(1).trim();
+      }
+      if (suffix) {
+        return suffix;
+      }
+    }
+
+    return variantDisplayName;
+  }
+
+  const variantName = item.variantName?.trim() || '';
+  if (variantName && variantName.toLowerCase() !== productName.toLowerCase()) {
+    return variantName;
+  }
+
+  return item.variantSku?.trim() || '';
 }
 
 function Spinner() {
@@ -335,7 +372,8 @@ export default function OrderDetailPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {order.items.map((item) => {
-                  const displayName = item.variantDisplayName || item.variantName || item.variantSku || item.productName;
+                  const displayName = item.productName;
+                  const variantDetails = getOrderItemVariantDetails(item);
                   const displayImageUrl = item.displayImageUrl || item.imageUrl || item.productImageUrl;
                   return (
                     <tr key={item.id}>
@@ -352,7 +390,12 @@ export default function OrderDetailPage() {
                               <Package className="w-5 h-5 text-slate-200" />
                             )}
                           </div>
-                          <span className="font-medium text-slate-700 line-clamp-2">{displayName}</span>
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-700 line-clamp-2">{displayName}</p>
+                            {variantDetails && (
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{variantDetails}</p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3 px-4 text-right text-slate-600 whitespace-nowrap">

@@ -1348,6 +1348,7 @@ export default function ProductDetailPage() {
             })
           )}
         </div>
+      </div>
       {/* ── Reviews ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 mt-6">
         <div className="flex items-center gap-3 mb-5">
@@ -1370,7 +1371,7 @@ export default function ProductDetailPage() {
           return (
             <div className="flex gap-6 mb-6 p-5 bg-slate-50 rounded-2xl">
               {/* Left: big score */}
-              <div className="flex flex-col items-center justify-center min-w-[90px]">
+              <div className="flex flex-col items-center justify-center min-w-22.5">
                 <div className="flex items-end gap-1 leading-none">
                   <span className="text-5xl font-bold text-slate-800">{avg.toFixed(1)}</span>
                   <span className="text-lg text-slate-400 mb-1">/5</span>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage, orderApi, reviewApi } from '../api/j2ee';
-import type { OrderResponse, OrderStatus } from '../api/j2ee/types';
+import type { OrderItemResponse, OrderResponse, OrderStatus } from '../api/j2ee/types';
 import OrderSuccessScreen from '../components/OrderSuccessScreen';
 import {
   Package, ChevronDown, ChevronUp, ShoppingBag,
@@ -49,6 +49,43 @@ function formatDeadline(iso?: string | null) {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
+}
+
+function getOrderItemVariantDetails(item: OrderItemResponse): string {
+  const options = (item.variantOptions || [])
+    .map((option) => option?.trim())
+    .filter((option): option is string => Boolean(option));
+
+  if (options.length > 0) {
+    return options.join(' • ');
+  }
+
+  const productName = item.productName?.trim() || '';
+  const variantDisplayName = item.variantDisplayName?.trim() || '';
+
+  if (variantDisplayName) {
+    if (productName && variantDisplayName.toLowerCase().startsWith(productName.toLowerCase())) {
+      const suffix = variantDisplayName.slice(productName.length).trim();
+      if (suffix.startsWith('(') && suffix.endsWith(')') && suffix.length > 2) {
+        return suffix.slice(1, -1).trim();
+      }
+      if ((suffix.startsWith('-') || suffix.startsWith(':')) && suffix.length > 1) {
+        return suffix.slice(1).trim();
+      }
+      if (suffix) {
+        return suffix;
+      }
+    }
+
+    return variantDisplayName;
+  }
+
+  const variantName = item.variantName?.trim() || '';
+  if (variantName && variantName.toLowerCase() !== productName.toLowerCase()) {
+    return variantName;
+  }
+
+  return item.variantSku?.trim() || '';
 }
 
 const STAR_LABELS = ['', 'Rất tệ', 'Tệ', 'Bình thường', 'Tốt', 'Xuất sắc'];
@@ -163,7 +200,8 @@ function OrderCard({
       <div className="px-5 py-4">
         <div className="space-y-2">
           {order.items.slice(0, expanded ? undefined : 2).map((item) => {
-            const displayName = item.variantDisplayName || item.variantName || item.variantSku || item.productName;
+            const displayName = item.productName;
+            const variantDetails = getOrderItemVariantDetails(item);
             const displayImageUrl = item.displayImageUrl || item.imageUrl || item.productImageUrl;
             return (
               <div key={item.id} className="flex items-start gap-3">
@@ -180,6 +218,7 @@ function OrderCard({
               </div>
               <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-700 truncate">{displayName}</p>
+                  {variantDetails && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{variantDetails}</p>}
                 <p className="text-xs text-slate-400">× {item.quantity}</p>
                 {isDelivered && (
                   item.reviewed ? (

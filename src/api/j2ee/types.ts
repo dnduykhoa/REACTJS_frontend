@@ -530,6 +530,7 @@ export interface UserNotificationResponse {
   read: boolean;
   createdAt: string;
   readAt: string | null;
+}
 
 // ─── Product Review ───────────────────────────────────────────────────────────
 export interface ReviewRequest {
