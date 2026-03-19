@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage, orderApi } from '../api/j2ee';
-import type { OrderResponse, OrderStatus } from '../api/j2ee/types';
+import type { OrderItemResponse, OrderResponse, OrderStatus } from '../api/j2ee/types';
+import ReviewModal from '../components/ReviewModal';
 import {
   ArrowLeft, Package, MapPin, Phone, CreditCard,
   FileText, Clock, CheckCircle2, XCircle, AlertCircle,
@@ -58,6 +59,43 @@ function formatRemaining(ms: number) {
   return `${minutes} phút ${seconds} giây`;
 }
 
+function getOrderItemVariantDetails(item: OrderItemResponse): string {
+  const options = (item.variantOptions || [])
+    .map((option) => option?.trim())
+    .filter((option): option is string => Boolean(option));
+
+  if (options.length > 0) {
+    return options.join(' • ');
+  }
+
+  const productName = item.productName?.trim() || '';
+  const variantDisplayName = item.variantDisplayName?.trim() || '';
+
+  if (variantDisplayName) {
+    if (productName && variantDisplayName.toLowerCase().startsWith(productName.toLowerCase())) {
+      const suffix = variantDisplayName.slice(productName.length).trim();
+      if (suffix.startsWith('(') && suffix.endsWith(')') && suffix.length > 2) {
+        return suffix.slice(1, -1).trim();
+      }
+      if ((suffix.startsWith('-') || suffix.startsWith(':')) && suffix.length > 1) {
+        return suffix.slice(1).trim();
+      }
+      if (suffix) {
+        return suffix;
+      }
+    }
+
+    return variantDisplayName;
+  }
+
+  const variantName = item.variantName?.trim() || '';
+  if (variantName && variantName.toLowerCase() !== productName.toLowerCase()) {
+    return variantName;
+  }
+
+  return item.variantSku?.trim() || '';
+}
+
 function Spinner() {
   return (
     <div className="flex justify-center py-24">
@@ -84,6 +122,8 @@ export default function OrderDetailPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
+  // ── Review state ──
+  const [reviewingItem, setReviewingItem] = useState<{ orderItemId: number; productName: string; productImageUrl: string | null } | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
@@ -181,6 +221,14 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleReviewSuccess = () => {
+    setReviewingItem(null);
+    // Reload order để cập nhật trạng thái reviewed
+    orderApi.getOrderById(order.id)
+      .then((res) => setOrder(res.data.data))
+      .catch(() => {});
+  };
+
   return (
     <>
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -207,11 +255,11 @@ export default function OrderDetailPage() {
         {!isCancelled && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <div className="flex items-center justify-between relative">
-              {/* Progress line */}
-              <div className="absolute left-0 right-0 top-5 h-0.5 bg-slate-100 mx-10 z-0" />
+              {/* Progress line – căn theo tâm bước đầu và bước cuối (mỗi bước chiếm flex-1 = 25%) */}
+              <div className="absolute left-[12.5%] right-[12.5%] top-5 h-0.5 bg-slate-100 z-0" />
               <div
-                className="absolute left-0 top-5 h-0.5 bg-indigo-500 mx-10 z-0 transition-all"
-                style={{ width: `${((status.step - 1) / (STEPS.length - 1)) * 100}%` }}
+                className="absolute left-[12.5%] top-5 h-0.5 bg-indigo-500 z-0 transition-all"
+                style={{ width: `${((status.step - 1) / (STEPS.length - 1)) * 75}%` }}
               />
               {STEPS.map((step, i) => {
                 const done = status.step > i + 1;
@@ -317,36 +365,71 @@ export default function OrderDetailPage() {
                   <th className="text-right text-slate-500 font-semibold pb-3 px-4">Giá</th>
                   <th className="text-right text-slate-500 font-semibold pb-3 px-4">Số lượng</th>
                   <th className="text-right text-slate-500 font-semibold pb-3">Thành tiền</th>
+                  {order.status === 'DELIVERED' && (
+                    <th className="text-center text-slate-500 font-semibold pb-3 pl-4">Đánh giá</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {order.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
-                          {item.productImageUrl ? (
-                            <img
-                              src={item.productImageUrl.startsWith('http') ? item.productImageUrl : `${BASE_URL}${item.productImageUrl}`}
-                              alt={item.productName}
-                              className="object-contain w-full h-full p-0.5"
-                            />
-                          ) : (
-                            <Package className="w-5 h-5 text-slate-200" />
-                          )}
+                {order.items.map((item) => {
+                  const displayName = item.productName;
+                  const variantDetails = getOrderItemVariantDetails(item);
+                  const displayImageUrl = item.displayImageUrl || item.imageUrl || item.productImageUrl;
+                  return (
+                    <tr key={item.id}>
+                      <td className="py-3 pr-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden">
+                            {displayImageUrl ? (
+                              <img
+                                src={displayImageUrl.startsWith('http') ? displayImageUrl : `${BASE_URL}${displayImageUrl}`}
+                                alt={displayName}
+                                className="object-contain w-full h-full p-0.5"
+                              />
+                            ) : (
+                              <Package className="w-5 h-5 text-slate-200" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-700 line-clamp-2">{displayName}</p>
+                            {variantDetails && (
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{variantDetails}</p>
+                            )}
+                          </div>
                         </div>
-                        <span className="font-medium text-slate-700 line-clamp-2">{item.productName}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-right text-slate-600 whitespace-nowrap">
-                      {Number(item.unitPrice).toLocaleString('vi-VN')}₫
-                    </td>
-                    <td className="py-3 px-4 text-right text-slate-600">{item.quantity}</td>
-                    <td className="py-3 text-right font-semibold text-slate-800 whitespace-nowrap">
-                      {Number(item.subtotal).toLocaleString('vi-VN')}₫
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-600 whitespace-nowrap">
+                        {Number(item.unitPrice).toLocaleString('vi-VN')}₫
+                      </td>
+                      <td className="py-3 px-4 text-right text-slate-600">{item.quantity}</td>
+                      <td className="py-3 text-right font-semibold text-slate-800 whitespace-nowrap">
+                        {Number(item.subtotal).toLocaleString('vi-VN')}₫
+                      </td>
+                      {order.status === 'DELIVERED' && (
+                        <td className="py-3 pl-4 text-center">
+                          {item.reviewed ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium whitespace-nowrap">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Đã đánh giá
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setReviewingItem({
+                                orderItemId: item.id,
+                                productName: item.productName,
+                                productImageUrl: item.productImageUrl,
+                              })}
+                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors font-medium whitespace-nowrap"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              Đánh giá
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -446,6 +529,17 @@ export default function OrderDetailPage() {
         </div>
       </div>
     </div>
+
+    {/* ── Review modal ── */}
+    {reviewingItem && (
+      <ReviewModal
+        orderItemId={reviewingItem.orderItemId}
+        productName={reviewingItem.productName}
+        productImageUrl={reviewingItem.productImageUrl}
+        onClose={() => setReviewingItem(null)}
+        onSuccess={handleReviewSuccess}
+      />
+    )}
 
     {/* ── Cancel modal ── */}
     {showCancelModal && (

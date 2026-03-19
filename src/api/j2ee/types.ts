@@ -225,6 +225,7 @@ export interface ProductVariant {
   sku: string;
   price: number;
   stockQuantity: number;
+  soldCount?: number;
   isActive: boolean;
   displayOrder: number;
   values: ProductVariantValue[];
@@ -259,6 +260,7 @@ export interface Product {
   description: string | null;
   price: number;
   stockQuantity: number;
+  soldCount?: number;
   category: Category | null;
   brand: Brand | null;
   media: ProductMedia[];
@@ -325,11 +327,16 @@ export interface OrderItemResponse {
   productName: string;
   productImageUrl: string | null;
   variantId: number | null;
+  variantName?: string | null;
+  variantDisplayName?: string | null;
   variantSku: string | null;
+  imageUrl?: string | null;
+  displayImageUrl?: string | null;
   variantOptions: string[] | null;
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  reviewed?: boolean; // true nếu user đã đánh giá item này
 }
 
 export interface OrderResponse {
@@ -464,7 +471,11 @@ export interface CartItemResponse {
   id: number;
   product: Product;
   variantId: number | null;
+  variantName?: string | null;
+  variantDisplayName?: string | null;
   variantSku: string | null;
+  imageUrl?: string | null;
+  displayImageUrl?: string | null;
   variantImageUrl: string | null;
   variantOptions: string[] | null;
   quantity: number;
@@ -519,4 +530,31 @@ export interface UserNotificationResponse {
   read: boolean;
   createdAt: string;
   readAt: string | null;
+}
+
+// ─── Product Review ───────────────────────────────────────────────────────────
+export interface ReviewRequest {
+  orderItemId: number;
+  rating: number; // 1-5
+  comment?: string;
+}
+
+export interface ReviewResponse {
+  id: number;
+  userId: number;
+  username: string;
+  productId: number;
+  productName: string;
+  variantId: number | null;
+  orderItemId: number;
+  rating: number;
+  comment: string | null;
+  imageUrls: string[];
+  hidden: boolean;
+  createdAt: string;
+}
+
+export interface ReviewSummary {
+  averageRating: number;
+  totalReviews: number;
 }

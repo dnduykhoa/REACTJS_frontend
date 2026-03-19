@@ -13,6 +13,7 @@ export { orderApi } from './orderApi';
 export { preorderApi } from './preorderApi';
 export { productQuestionApi } from './productQuestionApi';
 export { notificationApi } from './notificationApi';
+export { reviewApi } from './reviewApi';
 export { saleProgramApi } from './saleProgramApi';
 export { voucherApi } from './voucherApi';
 export { getApiErrorMessage, unwrapApiData } from './response';
