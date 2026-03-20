@@ -30,8 +30,10 @@ apiClient.interceptors.response.use(
     const shouldIgnore401Logout =
       requestUrl.includes('/api/admin/sales') ||
       requestUrl.includes('/api/admin/vouchers') ||
+      requestUrl.includes('/api/admin/reviews') ||
       requestUrl.includes('/api/sale-programs') ||
-      requestUrl.includes('/api/vouchers');
+      requestUrl.includes('/api/vouchers') ||
+      requestUrl.includes('/api/reviews');
 
     if (error?.response?.status === 401 && !shouldIgnore401Logout) {
       localStorage.removeItem('j2ee_user');

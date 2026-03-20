@@ -3,6 +3,7 @@ import { Link, useSearchParams, useLocation, useNavigate } from 'react-router-do
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage, orderApi, saleProgramApi, voucherApi } from '../api/j2ee';
+import { cartApi } from '../api/j2ee/cartApi';
 import type { PaymentMethod, ProductMedia, SaleProgram } from '../api/j2ee/types';
 import { getBestSaleForProduct, getSalePricing } from '../utils/salePricing';
 
@@ -354,21 +355,22 @@ export default function CheckoutPage() {
 
       const order = res.data.data;
 
-      // Xóa giỏ hàng ngay sau khi đặt hàng thành công (bất kể phương thức thanh toán)
-      // để giỏ hàng luôn sạch dù người dùng chưa thanh toán VNPAY/MoMo
-      if (!isBuyNow) await clearCart();
-
-      // Nếu VNPAY → redirect trình duyệt sang cổng thanh toán
+      // Nếu VNPAY → redirect ngay sang cổng thanh toán, xóa giỏ hàng qua API (không qua context để tránh re-render)
       if (paymentMethod === 'VNPAY' && order.vnpayUrl) {
+        if (!isBuyNow && user) cartApi.clearCart(user.userId).catch(() => {});
         window.location.href = order.vnpayUrl;
         return;
       }
 
-      // Nếu MoMo → redirect trình duyệt sang cổng thanh toán MoMo
+      // Nếu MoMo → redirect ngay sang cổng thanh toán MoMo, xóa giỏ hàng qua API (không qua context để tránh re-render)
       if (paymentMethod === 'MOMO' && order.momoUrl) {
+        if (!isBuyNow && user) cartApi.clearCart(user.userId).catch(() => {});
         window.location.href = order.momoUrl;
         return;
       }
+
+      // COD / các phương thức khác → xóa giỏ hàng rồi chuyển trang thành công
+      if (!isBuyNow) await clearCart();
 
       setPlacedOrder(order);
       setSuccess(true);

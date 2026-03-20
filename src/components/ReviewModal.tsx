@@ -1,12 +1,14 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Star, X, ImagePlus } from 'lucide-react';
 import { reviewApi } from '../api/j2ee';
 import { getApiErrorMessage } from '../api/j2ee';
+import type { ReviewResponse } from '../api/j2ee/types';
 
 interface ReviewModalProps {
   orderItemId: number;
   productName: string;
   productImageUrl?: string | null;
+  existingReview?: ReviewResponse;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -19,14 +21,17 @@ export default function ReviewModal({
   orderItemId,
   productName,
   productImageUrl,
+  existingReview,
   onClose,
   onSuccess,
 }: ReviewModalProps) {
-  const [rating, setRating] = useState(0);
+  const isEditMode = Boolean(existingReview);
+  const [rating, setRating] = useState(existingReview?.rating || 0);
   const [hovered, setHovered] = useState(0);
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(existingReview?.comment || '');
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>(existingReview?.imageUrls || []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +48,8 @@ export default function ReviewModal({
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    const remaining = MAX_IMAGES - images.length;
+    const totalImages = existingImageUrls.length + images.length;
+    const remaining = MAX_IMAGES - totalImages;
     const toAdd = files.slice(0, remaining);
 
     const valid: File[] = [];
@@ -68,10 +74,14 @@ export default function ReviewModal({
     e.target.value = '';
   };
 
-  const removeImage = (index: number) => {
+  const removeNewImage = (index: number) => {
     URL.revokeObjectURL(previews[index]);
     setImages((prev) => prev.filter((_, i) => i !== index));
     setPreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingImage = (url: string) => {
+    setExistingImageUrls((prev) => prev.filter((u) => u !== url));
   };
 
   const handleSubmit = async () => {
@@ -82,15 +92,26 @@ export default function ReviewModal({
     try {
       setSubmitting(true);
       setError('');
-      await reviewApi.submitReview({
-        orderItemId,
-        rating,
-        comment: comment.trim() || undefined,
-        images: images.length ? images : undefined,
-      });
+      
+      if (isEditMode && existingReview) {
+        await reviewApi.updateReview(existingReview.id, {
+          rating,
+          comment: comment.trim() || undefined,
+          images: images.length ? images : undefined,
+          keepImageUrls: existingImageUrls,
+        });
+      } else {
+        await reviewApi.submitReview({
+          orderItemId,
+          rating,
+          comment: comment.trim() || undefined,
+          images: images.length ? images : undefined,
+        });
+      }
+      
       onSuccess();
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Không thể gửi đánh giá. Vui lòng thử lại.'));
+      setError(getApiErrorMessage(err, isEditMode ? 'Không thể cập nhật đánh giá.' : 'Không thể gửi đánh giá. Vui lòng thử lại.'));
     } finally {
       setSubmitting(false);
     }
@@ -110,7 +131,9 @@ export default function ReviewModal({
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-lg font-bold text-slate-800 mb-4">Đánh giá sản phẩm</h2>
+        <h2 className="text-lg font-bold text-slate-800 mb-4">
+          {isEditMode ? 'Sửa đánh giá' : 'Đánh giá sản phẩm'}
+        </h2>
 
         {/* Product info */}
         <div className="flex items-center gap-3 mb-5">
@@ -167,20 +190,41 @@ export default function ReviewModal({
         <div className="mt-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-slate-600 font-medium">Ảnh đính kèm</span>
-            <span className="text-xs text-slate-400">{images.length}/{MAX_IMAGES} ảnh</span>
+            <span className="text-xs text-slate-400">
+              {existingImageUrls.length + images.length}/{MAX_IMAGES} ảnh
+            </span>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {previews.map((src, i) => (
-              <div key={i} className="relative w-16 h-16 shrink-0">
+            {/* Existing images */}
+            {existingImageUrls.map((url, i) => (
+              <div key={`exist-${i}`} className="relative w-16 h-16 shrink-0">
                 <img
-                  src={src}
-                  alt={`ảnh ${i + 1}`}
+                  src={url.startsWith('http') ? url : `${BASE_URL}${url}`}
+                  alt={`ảnh cũ ${i + 1}`}
                   className="w-16 h-16 rounded-lg object-cover border border-slate-200"
                 />
                 <button
                   type="button"
-                  onClick={() => removeImage(i)}
+                  onClick={() => removeExistingImage(url)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center hover:bg-rose-600 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            
+            {/* New images */}
+            {previews.map((src, i) => (
+              <div key={`new-${i}`} className="relative w-16 h-16 shrink-0">
+                <img
+                  src={src}
+                  alt={`ảnh mới ${i + 1}`}
+                  className="w-16 h-16 rounded-lg object-cover border border-slate-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeNewImage(i)}
                   className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white rounded-full flex items-center justify-center hover:bg-rose-600 transition-colors"
                 >
                   <X className="w-3 h-3" />
@@ -188,7 +232,7 @@ export default function ReviewModal({
               </div>
             ))}
 
-            {images.length < MAX_IMAGES && (
+            {existingImageUrls.length + images.length < MAX_IMAGES && (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -231,7 +275,9 @@ export default function ReviewModal({
             disabled={submitting}
             className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
-            {submitting ? 'Đang gửi...' : 'Gửi đánh giá'}
+            {submitting
+              ? (isEditMode ? 'Đang cập nhật...' : 'Đang gửi...')
+              : (isEditMode ? 'Cập nhật' : 'Gửi đánh giá')}
           </button>
         </div>
       </div>

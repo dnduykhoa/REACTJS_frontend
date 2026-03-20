@@ -1,6 +1,6 @@
-import type { Product, ProductStatus, ProductVariant } from '../api/j2ee/types';
+import type { Product, ProductStatus, ProductVariant, ReviewSummary } from '../api/j2ee/types';
 
-export type ProductWithDisplayHint = Product & { _displayVariantId?: number };
+export type ProductWithDisplayHint = Product & { _displayVariantId?: number, reviewSummary?: ReviewSummary };
 
 function normalizeText(value: string | null | undefined): string {
   return (value || '').trim().toLowerCase();

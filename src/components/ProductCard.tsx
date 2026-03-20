@@ -44,6 +44,15 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
   const detailPath = getProductDetailPath(product);
   const detailState = { displayVariantId: product._displayVariantId ?? null };
 
+  // Get soldCount from variant if displaying variant, otherwise from product
+  const displayedVariant = product._displayVariantId 
+    ? product.variants?.find(v => v.id === product._displayVariantId)
+    : null;
+  const soldCount = displayedVariant?.soldCount ?? product.soldCount ?? 0;
+  
+  // Get reviewSummary from variant if displaying variant, otherwise from product
+  const reviewSummary = displayedVariant?.reviewSummary ?? product.reviewSummary;
+
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -117,6 +126,22 @@ export default function ProductCard({ product }: { product: ProductWithDisplayHi
             <span className="text-xs text-amber-600 font-medium">
               Còn {product.stockQuantity}
             </span>
+          )}
+        </div>
+
+        {/* Sold count & review summary */}
+        <div className="flex items-center justify-between mt-1 mb-2">
+          {/* Sold count */}
+          <span className="text-xs text-slate-500">
+            Đã bán: {soldCount}
+          </span>
+          {/* Review summary */}
+          {reviewSummary ? (
+            <span className="text-xs text-yellow-600 font-medium">
+              ★ {reviewSummary.averageRating.toFixed(1)} ({reviewSummary.totalReviews})
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">Chưa có đánh giá</span>
           )}
         </div>
 

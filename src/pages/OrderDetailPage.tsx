@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getApiErrorMessage, orderApi } from '../api/j2ee';
-import type { OrderResponse, OrderStatus } from '../api/j2ee/types';
+import { getApiErrorMessage, orderApi, reviewApi } from '../api/j2ee';
+import type { OrderResponse, OrderStatus, ReviewResponse } from '../api/j2ee/types';
 import ReviewModal from '../components/ReviewModal';
 import {
   ArrowLeft, Package, MapPin, Phone, CreditCard,
   FileText, Clock, CheckCircle2, XCircle, AlertCircle,
-  ChevronRight, RefreshCw, Headphones, User, MessageSquare,
+  ChevronRight, RefreshCw, Headphones, User, MessageSquare, Pencil,
 } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
@@ -87,6 +87,8 @@ export default function OrderDetailPage() {
   const [customReason, setCustomReason] = useState('');
   // ── Review state ──
   const [reviewingItem, setReviewingItem] = useState<{ orderItemId: number; productName: string; productImageUrl: string | null } | null>(null);
+  const [editingReview, setEditingReview] = useState<ReviewResponse | null>(null);
+  const [loadingReview, setLoadingReview] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
@@ -186,10 +188,29 @@ export default function OrderDetailPage() {
 
   const handleReviewSuccess = () => {
     setReviewingItem(null);
+    setEditingReview(null);
     // Reload order để cập nhật trạng thái reviewed
     orderApi.getOrderById(order.id)
       .then((res) => setOrder(res.data.data))
       .catch(() => {});
+  };
+
+  const handleEditReview = async (orderItemId: number, productId: number, variantId: number | null, productName: string, productImageUrl: string | null) => {
+    try {
+      setLoadingReview(true);
+      const res = await reviewApi.getProductReviews(productId, variantId ?? undefined);
+      const found = res.data.data.find((r) => r.orderItemId === orderItemId) || null;
+      if (!found) {
+        alert('Không tìm thấy đánh giá. Vui lòng thử lại.');
+        return;
+      }
+      setEditingReview(found);
+      setReviewingItem({ orderItemId, productName, productImageUrl });
+    } catch {
+      alert('Không thể tải đánh giá. Vui lòng thử lại.');
+    } finally {
+      setLoadingReview(false);
+    }
   };
 
   return (
@@ -225,8 +246,8 @@ export default function OrderDetailPage() {
                 style={{ width: `${((status.step - 1) / (STEPS.length - 1)) * 75}%` }}
               />
               {STEPS.map((step, i) => {
-                const done = status.step > i + 1;
-                const active = status.step === i + 1;
+                const done = status.step > i + 1 || (status.step === i + 1 && i === STEPS.length - 1);
+                const active = status.step === i + 1 && i !== STEPS.length - 1;
                 return (
                   <div key={step.key} className="flex flex-col items-center gap-2 z-10 flex-1">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
@@ -236,7 +257,7 @@ export default function OrderDetailPage() {
                     }`}>
                       {done ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-xs font-bold">{i + 1}</span>}
                     </div>
-                    <span className={`text-xs text-center font-medium ${active ? 'text-indigo-600' : done ? 'text-slate-600' : 'text-slate-300'}`}>
+                    <span className={`text-xs text-center font-medium ${(active || done) && status.step === i + 1 ? 'text-indigo-600' : done ? 'text-slate-600' : 'text-slate-300'}`}>
                       {step.label}
                     </span>
                   </div>
@@ -365,10 +386,20 @@ export default function OrderDetailPage() {
                       {order.status === 'DELIVERED' && (
                         <td className="py-3 pl-4 text-center">
                           {item.reviewed ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium whitespace-nowrap">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Đã đánh giá
-                            </span>
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium whitespace-nowrap">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Đã đánh giá
+                              </span>
+                              <button
+                                onClick={() => handleEditReview(item.id, item.productId, item.variantId, item.productName, item.productImageUrl)}
+                                disabled={loadingReview}
+                                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                Sửa
+                              </button>
+                            </div>
                           ) : (
                             <button
                               onClick={() => setReviewingItem({
@@ -493,7 +524,11 @@ export default function OrderDetailPage() {
         orderItemId={reviewingItem.orderItemId}
         productName={reviewingItem.productName}
         productImageUrl={reviewingItem.productImageUrl}
-        onClose={() => setReviewingItem(null)}
+        existingReview={editingReview || undefined}
+        onClose={() => {
+          setReviewingItem(null);
+          setEditingReview(null);
+        }}
         onSuccess={handleReviewSuccess}
       />
     )}
