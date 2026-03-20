@@ -55,6 +55,7 @@ export default function AdminProductForm() {
   const [form, setForm] = useState({
     name: '',
     description: '',
+    boxContents: '',
     price: '',
     stockQuantity: '',
     categoryId: '',
@@ -102,6 +103,7 @@ export default function AdminProductForm() {
           setForm({
             name: p.name,
             description: p.description || '',
+            boxContents: p.boxContents || '',
             price: String(p.price),
             stockQuantity: String(p.stockQuantity),
             categoryId: p.category ? String(p.category.id) : '',
@@ -254,6 +256,7 @@ export default function AdminProductForm() {
       const params = {
         name: form.name,
         description: form.description || undefined,
+        boxContents: form.boxContents || undefined,
         price: Number(form.price),
         stockQuantity: Number(form.stockQuantity),
         categoryId: form.categoryId ? Number(form.categoryId) : undefined,
@@ -582,6 +585,29 @@ export default function AdminProductForm() {
                   });
                 }}
                 className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>Bộ sản phẩm gồm</label>
+              <textarea
+                rows={3}
+                value={form.boxContents}
+                onChange={set('boxContents')}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const start = target.selectionStart;
+                  const end = target.selectionEnd;
+                  const nextValue = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
+                  setForm((prev) => ({ ...prev, boxContents: nextValue }));
+                  requestAnimationFrame(() => {
+                    target.selectionStart = target.selectionEnd = start + 1;
+                  });
+                }}
+                className={inputClass}
+                placeholder="Ví dụ: 1 Máy tính bảng iPad Gen 10, Cáp sạc USB-C, Adapter sạc 20W"
               />
             </div>
 
