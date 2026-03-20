@@ -13,4 +13,16 @@ export { orderApi } from './orderApi';
 export { preorderApi } from './preorderApi';
 export { saleProgramApi } from './saleProgramApi';
 export { voucherApi } from './voucherApi';
+export { pcBuilderApi } from './pcBuilderApi';
+export type {
+	PcBuilderOption,
+	PcBuilderOptionsData,
+	PcBuilderSelection,
+	PcBuilderSelectedPart,
+	PcBuilderSlot,
+	PcBuilderSlotKey,
+	PcBuilderSummaryData,
+	PcBuilderWarning,
+	PcBuilderWarningSeverity,
+} from './pcBuilderApi';
 export { getApiErrorMessage, unwrapApiData } from './response';
