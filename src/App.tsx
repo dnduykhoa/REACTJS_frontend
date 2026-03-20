@@ -19,6 +19,7 @@ import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
 import OrdersPage from './pages/OrdersPage';
 import OrderDetailPage from './pages/OrderDetailPage';
+import PcBuilderPage from './pages/PcBuilderPage';
 
 // Admin pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -59,6 +60,7 @@ export default function App() {
             <Route path="/checkout" element={<ProtectedRoute customersOnly><CheckoutPage /></ProtectedRoute>} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
+            <Route path="/pc-builder" element={<PcBuilderPage />} />
           </Route>
 
           {/* Admin routes - /admin for Admin role */}

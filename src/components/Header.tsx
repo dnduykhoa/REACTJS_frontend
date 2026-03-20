@@ -60,6 +60,12 @@ export default function Header() {
           >
             Sản phẩm
           </Link>
+          <Link
+            to="/pc-builder"
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          >
+            Build PC
+          </Link>
         </nav>
 
         {/* User area (desktop) */}
@@ -175,6 +181,7 @@ export default function Header() {
         <div className="md:hidden border-t border-slate-100 bg-white px-4 py-3 space-y-1">
           <Link to="/" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Trang chủ</Link>
           <Link to="/products" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Sản phẩm</Link>
+          <Link to="/pc-builder" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Build PC</Link>
           <div className="border-t border-slate-100 pt-2 mt-2">
             {user ? (
               <>

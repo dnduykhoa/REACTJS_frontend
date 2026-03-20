@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { attributeGroupApi } from '../../api/j2ee';
 import type { AttributeGroup } from '../../api/j2ee/types';
-import { Layers, Plus, Pencil, Trash2, AlertCircle, X } from 'lucide-react';
+import { Layers, Plus, Pencil, Trash2, AlertCircle, X, Search } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 
 const PAGE_SIZE = 15;
@@ -21,6 +21,7 @@ export default function AdminAttributeGroups() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -29,6 +30,30 @@ export default function AdminAttributeGroups() {
   };
 
   useEffect(load, []);
+
+  const filteredGroups = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return groups;
+
+    return groups.filter((g) =>
+      [g.name, g.description || ''].some((value) => value.toLowerCase().includes(keyword)),
+    );
+  }, [groups, search]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
+
+  const pagedGroups = useMemo(
+    () => filteredGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredGroups, page],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setError(''); setShowForm(true); };
   const openEdit = (g: AttributeGroup) => {
@@ -80,6 +105,18 @@ export default function AdminAttributeGroups() {
         <button onClick={openAdd} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition">
           <Plus size={16} /> Thêm nhóm
         </button>
+      </div>
+
+      <div className="bg-white border border-slate-100 rounded-2xl p-3">
+        <div className="relative max-w-md">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm theo tên nhóm hoặc mô tả..."
+            className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          />
+        </div>
       </div>
 
       {showForm && (
@@ -136,13 +173,13 @@ export default function AdminAttributeGroups() {
               </tr>
             </thead>
             <tbody>
-              {groups.length === 0 && (
+              {filteredGroups.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-12 text-center">
                   <Layers size={32} className="mx-auto text-slate-300 mb-2" />
-                  <p className="text-slate-400 text-sm">Chưa có nhóm nào</p>
+                  <p className="text-slate-400 text-sm">Không tìm thấy nhóm phù hợp</p>
                 </td></tr>
               )}
-              {groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((g, idx) => (
+              {pagedGroups.map((g, idx) => (
                 <tr key={g.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 text-slate-400 tabular-nums">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{g.name}</td>
@@ -163,7 +200,7 @@ export default function AdminAttributeGroups() {
               ))}
             </tbody>
           </table>
-          <Pagination page={page} pageCount={Math.ceil(groups.length / PAGE_SIZE)} total={groups.length} pageSize={PAGE_SIZE} onChange={setPage} />
+          <Pagination page={page} pageCount={pageCount} total={filteredGroups.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </div>
       )}
     </div>
