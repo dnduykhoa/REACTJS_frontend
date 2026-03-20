@@ -226,6 +226,7 @@ export interface ProductVariant {
   price: number;
   stockQuantity: number;
   soldCount?: number;
+  reviewSummary?: ReviewSummary;
   isActive: boolean;
   displayOrder: number;
   values: ProductVariantValue[];
@@ -258,9 +259,11 @@ export interface Product {
   id: number;
   name: string;
   description: string | null;
+  boxContents?: string | null;
   price: number;
   stockQuantity: number;
   soldCount?: number;
+  reviewSummary?: ReviewSummary;
   category: Category | null;
   brand: Brand | null;
   media: ProductMedia[];
@@ -552,6 +555,8 @@ export interface ReviewResponse {
   imageUrls: string[];
   hidden: boolean;
   createdAt: string;
+  reply: string | null;
+  repliedAt: string | null;
 }
 
 export interface ReviewSummary {

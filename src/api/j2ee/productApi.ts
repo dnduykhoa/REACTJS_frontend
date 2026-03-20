@@ -64,6 +64,7 @@ export const productApi = {
   create: (params: {
     name: string;
     description?: string;
+    boxContents?: string;
     price: number;
     stockQuantity: number;
     categoryId?: number;
@@ -74,6 +75,7 @@ export const productApi = {
     const form = new FormData();
     form.append('name', params.name);
     if (params.description) form.append('description', params.description);
+    if (params.boxContents) form.append('boxContents', params.boxContents);
     form.append('price', String(params.price));
     form.append('stockQuantity', String(params.stockQuantity));
     if (params.categoryId != null) form.append('categoryId', String(params.categoryId));
@@ -91,6 +93,7 @@ export const productApi = {
     params: {
       name?: string;
       description?: string;
+      boxContents?: string;
       price?: number;
       stockQuantity?: number;
       categoryId?: number;
@@ -104,6 +107,7 @@ export const productApi = {
     const form = new FormData();
     if (params.name != null) form.append('name', params.name);
     if (params.description != null) form.append('description', params.description);
+    if (params.boxContents != null) form.append('boxContents', params.boxContents);
     if (params.price != null) form.append('price', String(params.price));
     if (params.stockQuantity != null) form.append('stockQuantity', String(params.stockQuantity));
     if (params.categoryId != null) form.append('categoryId', String(params.categoryId));

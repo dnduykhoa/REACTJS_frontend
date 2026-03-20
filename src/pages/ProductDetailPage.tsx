@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { preorderApi, productApi, productVariantApi, productQuestionApi, reviewApi } from '../api/j2ee';
 import type { Product, ProductMedia, ProductQuestionResponse, ProductStatus, ProductVariant, ReviewResponse } from '../api/j2ee/types';
-import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap, Star, X } from 'lucide-react';
+import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap, Star, X, RotateCcw, ShieldCheck, Box } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { buildProductSlug, extractProductIdFromSlug } from '../utils/productSlug';
@@ -767,6 +767,11 @@ export default function ProductDetailPage() {
       : canUseParent
         ? (product.soldCount ?? 0)
         : 0;
+  const displayedReviewSummary = selectedVariant
+    ? selectedVariant.reviewSummary
+    : canUseParent
+      ? product.reviewSummary
+      : null;
   const currentStock = selectedVariant
     ? (selectedVariant.stockQuantity ?? 0)
     : canUseParent
@@ -922,7 +927,7 @@ export default function ProductDetailPage() {
       </nav>
 
       {/* Main card */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+      <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-8 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
         {/* ── Media ── */}
         <div>
           <div className="relative h-80 bg-slate-50 rounded-xl overflow-hidden flex items-center justify-center mb-4 border border-slate-100">
@@ -1015,6 +1020,59 @@ export default function ProductDetailPage() {
               Hiển thị {thumbStartIndex + 1}-{Math.min(thumbStartIndex + THUMBNAIL_WINDOW_SIZE, images.length)} / {images.length} ảnh
             </p>
           )}
+
+          {/* ── Commitments ── */}
+          <div className="mt-6 bg-slate-50 rounded-xl p-4 space-y-3">
+            <h3 className="font-bold text-slate-800 text-base mb-3">TechStore cam kết</h3>
+            
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <RotateCcw className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="flex-1 text-sm">
+                <p className="text-slate-700">
+                  Hư gì đổi nấy <span className="font-semibold">12 tháng</span> tại 2950 siêu thị toàn quốc (miễn phí tháng đầu)
+                </p>
+              </div>
+            </div>
+
+            {product.status === 'NEW_ARRIVAL' && (
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Package className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1 text-sm">
+                  <p className="text-slate-700">
+                    Sản phẩm mới (Cần thanh toán trước khi mở hộp).
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {product.boxContents && product.boxContents.trim() !== '' && (
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Box className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1 text-sm">
+                  <p className="text-slate-700">
+                    Bộ sản phẩm gồm: {product.boxContents}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="flex-1 text-sm">
+                <p className="text-slate-700">
+                  Bảo hành <span className="font-semibold">chính hãng {product.category?.name?.toLowerCase().includes('laptop') ? 'laptop' : product.category?.name?.toLowerCase().includes('đồng hồ') ? 'đồng hồ' : 'điện thoại'} {product.category?.name?.toLowerCase().includes('laptop') ? '2' : '1'} năm</span> tại các trung tâm bảo hành hãng
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ── Info ── */}
@@ -1037,6 +1095,19 @@ export default function ProductDetailPage() {
             <p className="text-sm text-slate-500">
                 Đã bán <span className="font-semibold text-slate-700">{displayedSoldCount.toLocaleString('vi-VN')}</span>
             </p>
+          )}
+
+          {displayedReviewSummary && displayedReviewSummary.totalReviews > 0 && (
+            <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-1 text-yellow-600 font-medium">
+                <Star className="w-4 h-4 fill-current" />
+                <span>{displayedReviewSummary.averageRating.toFixed(1)}</span>
+              </div>
+              <span className="text-slate-400">|</span>
+              <span className="text-slate-500">
+                {displayedReviewSummary.totalReviews} đánh giá
+              </span>
+            </div>
           )}
 
           {hasVariants && (
@@ -1476,11 +1547,13 @@ export default function ProductDetailPage() {
                       </div>
                     </div>
                   </div>
-                  <span className="text-xs text-slate-400">
-                    {new Date(review.createdAt).toLocaleDateString('vi-VN', {
-                      day: '2-digit', month: '2-digit', year: 'numeric',
-                    })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">
+                      {new Date(review.createdAt).toLocaleDateString('vi-VN', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                      })}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-0.5 mb-2">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -1508,6 +1581,12 @@ export default function ProductDetailPage() {
                         />
                       </button>
                     ))}
+                  </div>
+                )}
+                {review.reply && (
+                  <div className="mt-3 pl-3 border-l-2 border-indigo-300 bg-indigo-50/60 rounded-r-lg py-2.5 pr-3">
+                    <p className="text-xs font-semibold text-indigo-600 mb-1">Phản hồi từ TechStore</p>
+                    <p className="text-sm text-slate-700 leading-relaxed">{review.reply}</p>
                   </div>
                 )}
               </div>
