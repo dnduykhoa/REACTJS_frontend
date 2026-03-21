@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { Star, X, ImagePlus } from 'lucide-react';
 import { reviewApi } from '../api/j2ee';
 import { getApiErrorMessage } from '../api/j2ee';

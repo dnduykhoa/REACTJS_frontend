@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Cpu, HardDrive, Loader2, RefreshCcw, Save, ShieldAlert, ShieldCheck } from 'lucide-react';
 import {
   getApiErrorMessage,
@@ -11,6 +12,8 @@ import {
   type PcBuilderSummaryData,
   type PcBuilderWarning,
 } from '../api/j2ee';
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 const SLOT_ORDER: PcBuilderSlotKey[] = [
   'cpu',
@@ -108,6 +111,9 @@ const severityClasses: Record<PcBuilderWarning['severity'], string> = {
 };
 
 export default function PcBuilderPage() {
+  const navigate = useNavigate();
+  const { user, canAccessAdmin } = useAuth();
+  const { addToCart, clearCart } = useCart();
   const [slots, setSlots] = useState<PcBuilderSlot[]>([]);
   const [selection, setSelection] = useState<PcBuilderSelection>(EMPTY_SELECTION);
   const [summary, setSummary] = useState<PcBuilderSummaryData | null>(null);
@@ -120,6 +126,8 @@ export default function PcBuilderPage() {
   const [summaryError, setSummaryError] = useState('');
   const [optionsError, setOptionsError] = useState('');
   const [localMsg, setLocalMsg] = useState('');
+  const [continueMsg, setContinueMsg] = useState('');
+  const [continuing, setContinuing] = useState(false);
 
   useEffect(() => {
     const cached = parseSelectionFromStorage(localStorage.getItem(STORAGE_KEY));
@@ -204,9 +212,24 @@ export default function PcBuilderPage() {
   }, [summary]);
 
   const hasBlockingError = useMemo(
-    () => Boolean(summary?.warnings?.some((warning) => warning.severity === 'ERROR')),
+    () => Boolean(!summary?.compatible && summary?.warnings?.some((warning) => warning.severity === 'ERROR')),
     [summary]
   );
+
+  const blockingWarnings = useMemo(
+    () => (summary?.warnings || []).filter((warning) => warning.severity === 'ERROR'),
+    [summary]
+  );
+
+  const continueDisabledReason = useMemo(() => {
+    if (continuing) return 'Đang xử lý cấu hình để chuyển sang checkout...';
+    if (loadingSummary) return 'Đang cập nhật summary, vui lòng chờ giây lát.';
+    if (!summary) return 'Chưa có summary để xác nhận cấu hình.';
+    if (hasBlockingError) return 'Cấu hình vẫn còn cảnh báo ERROR từ backend.';
+    return null;
+  }, [continuing, hasBlockingError, loadingSummary, summary]);
+
+  const continueDisabled = Boolean(continueDisabledReason);
 
   const applySelection = (slot: PcBuilderSlotKey, productId: number | null) => {
     setSelection((prev) => {
@@ -225,6 +248,7 @@ export default function PcBuilderPage() {
     });
 
     setLocalMsg('');
+    setContinueMsg('');
   };
 
   const saveLocalBuild = () => {
@@ -246,11 +270,55 @@ export default function PcBuilderPage() {
   const resetBuild = () => {
     setSelection(EMPTY_SELECTION);
     setLocalMsg('Đã reset cấu hình.');
+    setContinueMsg('');
   };
 
   const selectionForSlot = (slot: PcBuilderSlotKey) => selection[SLOT_TO_ID_KEY[slot]];
 
   const warningText = (warning: PcBuilderWarning) => WARNING_CODE_MESSAGES[warning.code] || warning.message;
+
+  const handleContinue = async () => {
+    if (continueDisabled) {
+      setContinueMsg(continueDisabledReason || 'Chưa thể tiếp tục ở thời điểm hiện tại.');
+      return;
+    }
+
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    if (canAccessAdmin) {
+      setContinueMsg('Tài khoản quản trị không hỗ trợ checkout theo flow khách hàng. Vui lòng đăng nhập bằng tài khoản USER.');
+      return;
+    }
+
+    const selectedIds = Array.from(
+      new Set((summary?.selectedParts || []).map((part) => part.productId).filter((id) => Number.isFinite(id)))
+    );
+
+    if (selectedIds.length === 0) {
+      setContinueMsg('Không tìm thấy linh kiện đã chọn để đưa vào giỏ hàng.');
+      return;
+    }
+
+    try {
+      setContinuing(true);
+      setContinueMsg('Đang thêm cấu hình vào giỏ hàng...');
+
+      await clearCart();
+      for (const productId of selectedIds) {
+        await addToCart(productId, 1);
+      }
+
+      setContinueMsg('Đã thêm build vào giỏ hàng. Đang chuyển sang trang checkout...');
+      navigate('/checkout');
+    } catch (err) {
+      setContinueMsg(getApiErrorMessage(err, 'Không thể chuyển build sang giỏ hàng. Vui lòng thử lại.'));
+    } finally {
+      setContinuing(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
@@ -398,12 +466,29 @@ export default function PcBuilderPage() {
                 </div>
 
                 <button
-                  disabled={hasBlockingError}
+                  disabled={continueDisabled}
+                  onClick={handleContinue}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  {hasBlockingError ? 'Không thể tiếp tục khi còn ERROR' : 'Build hợp lệ để tiếp tục'}
+                  {continuing ? 'Đang xử lý...' : continueDisabled ? 'Chưa thể tiếp tục' : 'Tiếp tục sang checkout'}
                 </button>
+                {continueDisabledReason && (
+                  <p className="text-xs text-slate-500">{continueDisabledReason}</p>
+                )}
+                {continueMsg && (
+                  <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">{continueMsg}</p>
+                )}
+                {hasBlockingError && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                    <p className="font-semibold mb-1">Lý do đang bị chặn:</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {blockingWarnings.map((warning) => (
+                        <li key={`${warning.code}-block`}>{warningText(warning)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-sm text-slate-500">Chưa có dữ liệu summary.</p>

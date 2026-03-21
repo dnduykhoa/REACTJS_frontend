@@ -1,7 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { preorderApi, productApi, productVariantApi, productQuestionApi, reviewApi } from '../api/j2ee';
-import type { Product, ProductMedia, ProductQuestionResponse, ProductStatus, ProductVariant, ReviewResponse } from '../api/j2ee/types';
+import { getApiErrorMessage, preorderApi, productApi, productVariantApi, productQuestionApi, reviewApi } from '../api/j2ee';
+import type {
+  CompareAttributeRow,
+  CompareItem,
+  Product,
+  ProductComparisonData,
+  ProductMedia,
+  ProductQuestionResponse,
+  ProductStatus,
+  ProductVariant,
+  ReviewResponse,
+} from '../api/j2ee/types';
 import { Package, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Tag, Minus, Plus, ShoppingCart, Zap, Star, X, RotateCcw, ShieldCheck, Box } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -9,6 +19,8 @@ import { buildProductSlug, extractProductIdFromSlug } from '../utils/productSlug
 import { validateVietnamesePhone } from '../utils/phoneUtils';
 
 const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
+const MAX_COMPARE_PRODUCTS = 4;
+const SAME_TYPE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function resolveUrl(url: string) {
   if (!url) return '';
@@ -97,6 +109,37 @@ function resolveProductStatus(product: Product): ProductStatus {
   return product.status ?? (product.isActive ? (product.stockQuantity > 0 ? 'ACTIVE' : 'OUT_OF_STOCK') : 'INACTIVE');
 }
 
+function resolveProductImage(media: ProductMedia[] | undefined): string | null {
+  const primary = (media || []).find((m) => m.mediaType === 'IMAGE' && m.isPrimary);
+  const first = (media || []).find((m) => m.mediaType === 'IMAGE');
+  return primary?.mediaUrl || first?.mediaUrl || null;
+}
+
+function getStatusLabel(status: string) {
+  if (status === 'ACTIVE') return 'Đang bán';
+  if (status === 'NEW_ARRIVAL') return 'Mới về';
+  if (status === 'OUT_OF_STOCK') return 'Hết hàng';
+  if (status === 'INACTIVE') return 'Ngừng bán';
+  return status;
+}
+
+function getStatusClass(status: string) {
+  if (status === 'ACTIVE') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'NEW_ARRIVAL') return 'bg-blue-100 text-blue-700';
+  if (status === 'OUT_OF_STOCK') return 'bg-orange-100 text-orange-700';
+  if (status === 'INACTIVE') return 'bg-slate-200 text-slate-600';
+  return 'bg-slate-100 text-slate-600';
+}
+
+function sortCompareAttributes(attributes: CompareAttributeRow[]) {
+  return [...attributes].sort((a, b) => {
+    const leftOrder = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+    return a.attrName.localeCompare(b.attrName, 'vi');
+  });
+}
+
 export default function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -134,6 +177,13 @@ export default function ProductDetailPage() {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [sameTypeProducts, setSameTypeProducts] = useState<Product[]>([]);
+  const [sameTypeLoading, setSameTypeLoading] = useState(false);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [selectedCompareIds, setSelectedCompareIds] = useState<number[]>([]);
+  const [compareData, setCompareData] = useState<ProductComparisonData | null>(null);
+  const [compareFeedback, setCompareFeedback] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
+  const sameTypeCacheRef = useRef<Map<number, { fetchedAt: number; items: Product[] }>>(new Map());
 
   const THUMBNAIL_WINDOW_SIZE = 8;
 
@@ -415,6 +465,47 @@ export default function ProductDetailPage() {
       .catch(() => setReviews([]))
       .finally(() => setReviewsLoading(false));
   }, [product?.id, selectedVariant?.id, hasUserSelectedVariant]);
+
+  useEffect(() => {
+    if (!product?.id) return;
+
+    setSelectedCompareIds([product.id]);
+    setCompareData(null);
+    setCompareFeedback(null);
+
+    const cached = sameTypeCacheRef.current.get(product.id);
+    if (cached && Date.now() - cached.fetchedAt < SAME_TYPE_CACHE_TTL_MS) {
+      setSameTypeProducts(cached.items);
+      setSameTypeLoading(false);
+      return;
+    }
+
+    setSameTypeLoading(true);
+    productApi.getSameType(product.id, 10)
+      .then((res) => {
+        const items = (res.data.data || []).filter((item) => item.id !== product.id);
+        sameTypeCacheRef.current.set(product.id, { fetchedAt: Date.now(), items });
+        setSameTypeProducts(items);
+      })
+      .catch((err: unknown) => {
+        setSameTypeProducts([]);
+        setCompareFeedback({ type: 'error', text: getApiErrorMessage(err, 'Không tải được sản phẩm cùng loại') });
+      })
+      .finally(() => setSameTypeLoading(false));
+  }, [product?.id]);
+
+  const compareCandidates = useMemo(() => {
+    if (!product) return sameTypeProducts;
+
+    const productMap = new Map<number, Product>();
+    productMap.set(product.id, product);
+    sameTypeProducts.forEach((item) => {
+      if (!productMap.has(item.id)) productMap.set(item.id, item);
+    });
+    return Array.from(productMap.values());
+  }, [product, sameTypeProducts]);
+
+  const selectedCompareSet = useMemo(() => new Set(selectedCompareIds), [selectedCompareIds]);
 
   if (loading) return <Spinner />;
 
@@ -778,6 +869,56 @@ export default function ProductDetailPage() {
       ? (product.stockQuantity ?? 0)
       : 0;
   const inStock = effectivePurchasable;
+
+  const handleToggleCompare = (targetId: number) => {
+    if (targetId === product.id) return;
+
+    setCompareFeedback(null);
+    setSelectedCompareIds((prev) => {
+      if (prev.includes(targetId)) {
+        return prev.filter((id) => id !== targetId);
+      }
+
+      if (prev.length >= MAX_COMPARE_PRODUCTS) {
+        setCompareFeedback({
+          type: 'error',
+          text: `Chỉ có thể chọn tối đa ${MAX_COMPARE_PRODUCTS} sản phẩm để so sánh.`,
+        });
+        return prev;
+      }
+
+      return [...prev, targetId];
+    });
+  };
+
+  const handleCompare = async () => {
+    if (selectedCompareIds.length < 2) {
+      setCompareFeedback({ type: 'error', text: 'Cần chọn ít nhất 2 sản phẩm để so sánh.' });
+      return;
+    }
+
+    try {
+      setCompareLoading(true);
+      setCompareFeedback(null);
+      const res = await productApi.compare(selectedCompareIds);
+      const payload = res.data.data;
+      setCompareData(payload);
+
+      if (payload && (!payload.attributes || payload.attributes.length === 0)) {
+        setCompareFeedback({ type: 'info', text: 'Chưa có thông số để so sánh.' });
+      }
+    } catch (err: unknown) {
+      const msg = getApiErrorMessage(err, 'Không thể so sánh sản phẩm lúc này.');
+      setCompareData(null);
+      setCompareFeedback({ type: 'error', text: msg });
+
+      if (msg.toLowerCase().includes('cùng danh mục')) {
+        setSelectedCompareIds([product.id]);
+      }
+    } finally {
+      setCompareLoading(false);
+    }
+  };
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -1329,6 +1470,174 @@ export default function ProductDetailPage() {
       </div>
 
       {/* ── Specifications ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">So sánh sản phẩm cùng loại</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Chọn từ 2 đến {MAX_COMPARE_PRODUCTS} sản phẩm để xem bảng so sánh nhanh.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleCompare}
+            disabled={compareLoading || selectedCompareIds.length < 2}
+            title={selectedCompareIds.length < 2 ? 'Cần chọn ít nhất 2 sản phẩm' : ''}
+            className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {compareLoading ? 'Đang so sánh...' : 'So sánh'}
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-sm text-slate-600">
+            Đã chọn <span className="font-semibold text-slate-800">{selectedCompareIds.length}</span>/{MAX_COMPARE_PRODUCTS} sản phẩm
+          </p>
+          {selectedCompareIds.length < 2 && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
+              Cần chọn ít nhất 2 sản phẩm
+            </p>
+          )}
+        </div>
+
+        {compareFeedback && (
+          <div
+            className={`mt-4 rounded-xl border px-4 py-2.5 text-sm ${compareFeedback.type === 'error'
+              ? 'border-rose-200 bg-rose-50 text-rose-700'
+              : 'border-blue-200 bg-blue-50 text-blue-700'
+            }`}
+          >
+            {compareFeedback.text}
+          </div>
+        )}
+
+        {sameTypeLoading ? (
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="rounded-xl border border-slate-200 p-3 animate-pulse">
+                <div className="h-28 rounded-lg bg-slate-100" />
+                <div className="h-4 mt-3 w-3/4 bg-slate-100 rounded" />
+                <div className="h-4 mt-2 w-1/2 bg-slate-100 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : compareCandidates.length === 0 ? (
+          <p className="mt-5 text-sm text-slate-500">Chưa có sản phẩm cùng loại để gợi ý.</p>
+        ) : (
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {compareCandidates.map((item) => {
+              const imageUrl = resolveProductImage(item.media);
+              const checked = selectedCompareSet.has(item.id);
+              const isCurrent = item.id === product.id;
+              const disableUnchecked = !checked && selectedCompareIds.length >= MAX_COMPARE_PRODUCTS;
+              const status = resolveProductStatus(item);
+
+              return (
+                <label
+                  key={item.id}
+                  className={`relative block rounded-xl border p-3 transition-colors ${checked
+                    ? 'border-indigo-300 bg-indigo-50/50'
+                    : 'border-slate-200 bg-white hover:border-indigo-200'
+                  } ${disableUnchecked ? 'opacity-60' : ''}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleCompare(item.id)}
+                      disabled={isCurrent || disableUnchecked}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="h-26 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-center overflow-hidden">
+                        {imageUrl ? (
+                          <img src={resolveUrl(imageUrl)} alt={item.name} className="w-full h-full object-contain p-2" />
+                        ) : (
+                          <Package className="w-10 h-10 text-slate-200" />
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-slate-800 line-clamp-2">{item.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">{item.brand?.name || 'N/A'}</p>
+                      <p className="text-sm font-bold text-[#e60012] mt-1">{Number(item.price).toLocaleString('vi-VN')}₫</p>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className={`text-[11px] px-2 py-1 rounded-full font-medium ${getStatusClass(status)}`}>
+                          {getStatusLabel(status)}
+                        </span>
+                        <span className="text-xs text-slate-500">Kho: {item.stockQuantity}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {isCurrent && (
+                    <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-1 rounded-full bg-indigo-600 text-white">
+                      Đang xem
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        {compareData && (
+          <div className="mt-6 border border-slate-100 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <p className="text-sm font-semibold text-slate-800">Bảng so sánh: {compareData.categoryName}</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-[760px] w-full text-sm">
+                <thead>
+                  <tr className="bg-white border-b border-slate-100">
+                    <th className="text-left px-4 py-3 font-semibold text-slate-700 w-60">Thuộc tính</th>
+                    {compareData.products.map((compareProduct: CompareItem) => (
+                      <th key={compareProduct.id} className="align-top text-left px-4 py-3 min-w-56 border-l border-slate-100">
+                        <div className="space-y-1">
+                          <div className="h-20 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden">
+                            {compareProduct.imageUrl ? (
+                              <img
+                                src={resolveUrl(compareProduct.imageUrl)}
+                                alt={compareProduct.name}
+                                className="w-full h-full object-contain p-2"
+                              />
+                            ) : (
+                              <Package className="w-8 h-8 text-slate-200" />
+                            )}
+                          </div>
+                          <p className="font-semibold text-slate-800 line-clamp-2">{compareProduct.name}</p>
+                          <p className="text-xs text-slate-500">{compareProduct.brandName || 'N/A'}</p>
+                          <p className="font-bold text-[#e60012]">{Number(compareProduct.price).toLocaleString('vi-VN')}₫</p>
+                          <p className="text-xs text-slate-500">Kho: {compareProduct.stockQuantity}</p>
+                          <span className={`inline-flex text-[11px] px-2 py-0.5 rounded-full font-medium ${getStatusClass(compareProduct.status)}`}>
+                            {getStatusLabel(compareProduct.status)}
+                          </span>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortCompareAttributes(compareData.attributes || []).map((row: CompareAttributeRow, rowIdx) => (
+                    <tr key={row.attrKey} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}>
+                      <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">
+                        {row.attrName}
+                        {row.unit ? <span className="text-slate-500 font-normal"> ({row.unit})</span> : null}
+                      </td>
+                      {compareData.products.map((compareProduct: CompareItem) => {
+                        const cellValue = row.values?.[String(compareProduct.id)] || '-';
+                        return (
+                          <td key={`${row.attrKey}-${compareProduct.id}`} className="px-4 py-3 text-slate-700 border-l border-slate-100 whitespace-pre-line">
+                            {cellValue}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
       {Object.keys(grouped).length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 mt-6">
           <h2 className="text-lg font-bold text-slate-800 mb-5">Thông số kỹ thuật</h2>

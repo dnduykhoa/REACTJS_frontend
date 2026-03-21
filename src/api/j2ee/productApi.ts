@@ -1,6 +1,7 @@
 import apiClient from './client';
 import type {
   ApiResponse,
+  ProductComparisonData,
   Product,
   ProductMedia,
   ProductSpecification,
@@ -141,6 +142,19 @@ export const productApi = {
 
   getOutOfStock: () =>
     apiClient.get<ApiResponse<Product[]>>('/api/products/out-of-stock'),
+
+  getSameType: (productId: number, limit = 10) =>
+    apiClient.get<ApiResponse<Product[] | null>>(`/api/products/${productId}/same-type`, {
+      params: { limit },
+    }),
+
+  compare: (ids: number[]) => {
+    const query = new URLSearchParams();
+    ids.forEach((id) => query.append('ids', String(id)));
+    return apiClient.get<ApiResponse<ProductComparisonData | null>>(
+      `/api/products/compare?${query.toString()}`
+    );
+  },
 };
 
 // ─── Product Media ────────────────────────────────────────────────────────────

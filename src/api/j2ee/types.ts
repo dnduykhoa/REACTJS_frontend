@@ -275,6 +275,31 @@ export interface Product {
   updatedAt: string;
 }
 
+export interface CompareItem {
+  id: number;
+  name: string;
+  price: number;
+  stockQuantity: number;
+  status: string;
+  brandName: string | null;
+  imageUrl: string | null;
+}
+
+export interface CompareAttributeRow {
+  attrKey: string;
+  attrName: string;
+  unit: string | null;
+  displayOrder: number | null;
+  values: Record<string, string>;
+}
+
+export interface ProductComparisonData {
+  categoryId: number;
+  categoryName: string;
+  products: CompareItem[];
+  attributes: CompareAttributeRow[];
+}
+
 export type PreorderRequestStatus = 'WAITING' | 'NOTIFIED';
 
 export interface PreorderRegistrationRequest {
