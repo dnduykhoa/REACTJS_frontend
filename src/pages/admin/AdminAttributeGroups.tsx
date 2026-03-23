@@ -55,6 +55,15 @@ export default function AdminAttributeGroups() {
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount]);
 
+  useEffect(() => {
+    if (showForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [showForm]);
+
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setError(''); setShowForm(true); };
   const openEdit = (g: AttributeGroup) => {
     setEditing(g);
@@ -120,8 +129,8 @@ export default function AdminAttributeGroups() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 min-h-screen overflow-y-auto flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md my-8">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-slate-900 text-lg">{editing ? 'Chỉnh sửa nhóm' : 'Thêm nhóm mới'}</h3>
               <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>

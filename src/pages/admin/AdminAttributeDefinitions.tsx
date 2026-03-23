@@ -84,6 +84,15 @@ export default function AdminAttributeDefinitions() {
     }
   }, [page, pageCount]);
 
+  useEffect(() => {
+    if (showForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [showForm]);
+
   const openAdd = () => { setEditing(null); setForm(emptyForm()); setError(''); setShowForm(true); };
   const openEdit = (d: AttributeDefinition) => {
     setEditing(d);
@@ -156,8 +165,8 @@ export default function AdminAttributeDefinitions() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 min-h-screen overflow-y-auto flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg my-8">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-slate-900 text-lg">{editing ? 'Chỉnh sửa thuộc tính' : 'Thêm thuộc tính'}</h3>
               <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>

@@ -101,22 +101,62 @@ export default function AdminVouchers() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [syncNotice, setSyncNotice] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Voucher | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [page, setPage] = useState(1);
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
     setError('');
-    voucherApi
-      .getAll()
-      .then((res) => setItems(res.data.data || []))
-      .catch((err: unknown) => setError(getApiErrorMessage(err, 'Không thể tải danh sách voucher.')))
-      .finally(() => setLoading(false));
+    setSyncNotice('');
+    try {
+      const res = await voucherApi.getAll();
+      const vouchers = res.data.data || [];
+      setItems(vouchers);
+
+      // Auto-sync: Tự động tắt các voucher đã hết lượt sử dụng
+      const exhaustedButActive = vouchers.filter((v) => {
+        const usageCount = v.usageCount ?? 0;
+        const maxUsageCount = v.maxUsageCount;
+        return v.isActive && maxUsageCount != null && usageCount >= maxUsageCount;
+      });
+
+      if (exhaustedButActive.length > 0) {
+        // Tự động toggle các voucher đã hết về inactive
+        await Promise.allSettled(
+          exhaustedButActive.map((v) => voucherApi.toggle(v.id))
+        );
+        // Reload lại để cập nhật UI
+        const reloadRes = await voucherApi.getAll();
+        setItems(reloadRes.data.data || []);
+        setSyncNotice(`Đã tự động cập nhật trạng thái cho ${exhaustedButActive.length} voucher đã hết lượt sử dụng.`);
+        // Clear thông báo sau 5 giây
+        setTimeout(() => setSyncNotice(''), 5000);
+      }
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Không thể tải danh sách voucher.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+  }, []);
+
+  // Disable scroll khi modal mở
+  useEffect(() => {
+    if (showForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showForm]);
 
   const openAdd = () => {
     setEditing(null);
@@ -259,9 +299,15 @@ export default function AdminVouchers() {
         </div>
       )}
 
+      {syncNotice && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-xl text-sm">
+          <AlertCircle size={15} className="shrink-0" /> {syncNotice}
+        </div>
+      )}
+
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4 py-6">
-          <div className="bg-white rounded-2xl shadow-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 min-h-screen overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-3xl max-h-[96vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-lg">
                 {editing ? 'Chỉnh sửa voucher' : 'Thêm voucher'}
@@ -327,10 +373,21 @@ export default function AdminVouchers() {
                   <label className={labelClass}>Giá trị giảm *</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={form.discountValue}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, discountValue: Number(e.target.value) }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      // Cho phép xóa để nhập giá trị mới
+                      if (val === '') {
+                        setForm((prev) => ({ ...prev, discountValue: 0 }));
+                      } else {
+                        const numVal = Number(val);
+                        if (numVal >= 0) {
+                          setForm((prev) => ({ ...prev, discountValue: numVal }));
+                        }
+                      }
+                    }}
                     className={inputClass}
                   />
                 </div>
@@ -338,10 +395,15 @@ export default function AdminVouchers() {
                   <label className={labelClass}>Giảm tối đa</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={form.maxDiscountAmount}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, maxDiscountAmount: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || Number(val) >= 0) {
+                        setForm((prev) => ({ ...prev, maxDiscountAmount: val }));
+                      }
+                    }}
                     className={inputClass}
                     placeholder="Optional"
                   />
@@ -350,10 +412,15 @@ export default function AdminVouchers() {
                   <label className={labelClass}>Đơn tối thiểu</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={form.minOrderAmount}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, minOrderAmount: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || Number(val) >= 0) {
+                        setForm((prev) => ({ ...prev, minOrderAmount: val }));
+                      }
+                    }}
                     className={inputClass}
                     placeholder="Optional"
                   />
@@ -378,10 +445,15 @@ export default function AdminVouchers() {
                   <label className={labelClass}>Số lượt dùng tối đa</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={form.maxUsageCount}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, maxUsageCount: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || Number(val) >= 0) {
+                        setForm((prev) => ({ ...prev, maxUsageCount: val }));
+                      }
+                    }}
                     className={inputClass}
                     placeholder="Optional"
                   />

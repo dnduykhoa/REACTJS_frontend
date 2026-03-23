@@ -104,6 +104,18 @@ export default function AdminSalePrograms() {
 
   useEffect(load, []);
 
+  // Disable scroll khi modal mở
+  useEffect(() => {
+    if (showForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showForm]);
+
   const openAdd = () => {
     setEditing(null);
     setForm(emptyForm());
@@ -280,8 +292,8 @@ export default function AdminSalePrograms() {
       )}
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4 py-6">
-          <div className="bg-white rounded-2xl shadow-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 min-h-screen overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-4xl max-h-[96vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-lg">
                 {editing ? 'Chỉnh sửa chương trình sale' : 'Thêm chương trình sale'}
@@ -339,10 +351,21 @@ export default function AdminSalePrograms() {
                   <label className={labelClass}>Giá trị giảm *</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={form.discountValue}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, discountValue: Number(e.target.value) }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      // Cho phép xóa để nhập giá trị mới
+                      if (val === '') {
+                        setForm((prev) => ({ ...prev, discountValue: 0 }));
+                      } else {
+                        const numVal = Number(val);
+                        if (numVal >= 0) {
+                          setForm((prev) => ({ ...prev, discountValue: numVal }));
+                        }
+                      }
+                    }}
                     className={inputClass}
                   />
                 </div>
@@ -350,10 +373,15 @@ export default function AdminSalePrograms() {
                   <label className={labelClass}>Giảm tối đa</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={form.maxDiscountAmount}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, maxDiscountAmount: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || Number(val) >= 0) {
+                        setForm((prev) => ({ ...prev, maxDiscountAmount: val }));
+                      }
+                    }}
                     className={inputClass}
                     placeholder="Optional"
                   />

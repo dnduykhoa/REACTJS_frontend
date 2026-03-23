@@ -35,6 +35,18 @@ export default function AdminCategories() {
 
   useEffect(load, []);
 
+  // Disable scroll khi modal mở
+  useEffect(() => {
+    if (showForm) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showForm]);
+
   const openAdd = () => {
     setEditing(null);
     setForm(emptyForm());
@@ -106,7 +118,7 @@ export default function AdminCategories() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 min-h-screen overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-slate-900 text-lg">
