@@ -22,6 +22,28 @@ export type PcBuilderSelection = {
   coolingId: number | null;
 };
 
+export interface PcBuilderSelectionItem {
+  productId: number;
+  variantId: number | null;
+  quantity: number;
+}
+
+export interface PcBuilderSelectionPayload {
+  cpu: PcBuilderSelectionItem | null;
+  mainboard: PcBuilderSelectionItem | null;
+  gpu: PcBuilderSelectionItem | null;
+  storage: PcBuilderSelectionItem | null;
+  psu: PcBuilderSelectionItem | null;
+  case: PcBuilderSelectionItem | null;
+  cooling: PcBuilderSelectionItem | null;
+  ramSelections: PcBuilderSelectionItem[];
+}
+
+export interface PcBuilderOptionsRequest {
+  slot: PcBuilderSlotKey;
+  selection: PcBuilderSelectionPayload;
+}
+
 export interface PcBuilderSlot {
   key: PcBuilderSlotKey;
   label: string;
@@ -36,6 +58,25 @@ export interface PcBuilderOption {
   brandName: string | null;
   categoryName: string | null;
   keySpecs: Record<string, string | number | boolean | null>;
+  hasVariants?: boolean;
+  defaultVariantId?: number | null;
+  availableVariants?: PcBuilderAvailableVariant[];
+  compatibility?: PcBuilderOptionCompatibility;
+}
+
+export interface PcBuilderAvailableVariant {
+  variantId: number | null;
+  label: string;
+  price: number;
+  stockQuantity: number;
+  keySpecs: Record<string, string | number | boolean | null>;
+}
+
+export type PcBuilderCompatibilityStatus = 'COMPATIBLE' | 'WARNING' | 'INCOMPATIBLE';
+
+export interface PcBuilderOptionCompatibility {
+  status: PcBuilderCompatibilityStatus;
+  reasons: string[];
 }
 
 export interface PcBuilderOptionsData {
@@ -58,8 +99,13 @@ export interface PcBuilderSelectedPart {
   slot?: string;
   slotKey?: string;
   productId: number;
+  variantId?: number | null;
+  quantity?: number;
+  unitPrice?: number;
+  lineTotal?: number;
   name: string;
   price: number;
+  variantLabel?: string | null;
 }
 
 export interface PcBuilderSummaryData {
@@ -71,37 +117,22 @@ export interface PcBuilderSummaryData {
   warnings: PcBuilderWarning[];
 }
 
-const toParams = (selection: PcBuilderSelection) => {
-  const params = new URLSearchParams();
-
-  (Object.entries(selection) as Array<[keyof PcBuilderSelection, number | null]>).forEach(([key, value]) => {
-    if (value != null) {
-      params.set(key, String(value));
-    }
-  });
-
-  return params;
-};
+export interface PcBuilderCheckoutItem {
+  productId: number;
+  variantId: number | null;
+  quantity: number;
+}
 
 export const pcBuilderApi = {
   getSlots: () =>
     apiClient.get<ApiResponse<PcBuilderSlot[]>>('/api/products/pc-builder/slots'),
 
-  getOptions: (slot: PcBuilderSlotKey, selection: PcBuilderSelection) => {
-    const params = toParams(selection);
-    params.set('slot', slot);
+  getOptions: (request: PcBuilderOptionsRequest) =>
+    apiClient.post<ApiResponse<PcBuilderOptionsData>>('/api/products/pc-builder/options', request),
 
-    return apiClient.get<ApiResponse<PcBuilderOptionsData>>(
-      `/api/products/pc-builder/options?${params.toString()}`
-    );
-  },
+  getSummary: (selection: PcBuilderSelectionPayload) =>
+    apiClient.post<ApiResponse<PcBuilderSummaryData>>('/api/products/pc-builder/summary', { selection }),
 
-  getSummary: (selection: PcBuilderSelection) => {
-    const params = toParams(selection);
-    const suffix = params.toString();
-    const url = suffix
-      ? `/api/products/pc-builder/summary?${suffix}`
-      : '/api/products/pc-builder/summary';
-    return apiClient.get<ApiResponse<PcBuilderSummaryData>>(url);
-  },
+  getCheckoutPreview: (selection: PcBuilderSelectionPayload) =>
+    apiClient.post<ApiResponse<PcBuilderCheckoutItem[]>>('/api/products/pc-builder/checkout-preview', { selection }),
 };

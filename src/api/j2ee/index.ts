@@ -18,9 +18,16 @@ export { saleProgramApi } from './saleProgramApi';
 export { voucherApi } from './voucherApi';
 export { pcBuilderApi } from './pcBuilderApi';
 export type {
+	PcBuilderAvailableVariant,
+	PcBuilderCheckoutItem,
+	PcBuilderCompatibilityStatus,
 	PcBuilderOption,
+	PcBuilderOptionCompatibility,
 	PcBuilderOptionsData,
+	PcBuilderOptionsRequest,
 	PcBuilderSelection,
+	PcBuilderSelectionItem,
+	PcBuilderSelectionPayload,
 	PcBuilderSelectedPart,
 	PcBuilderSlot,
 	PcBuilderSlotKey,

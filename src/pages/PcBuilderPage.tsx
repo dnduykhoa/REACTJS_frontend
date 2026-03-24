@@ -1,19 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, Cpu, HardDrive, Loader2, RefreshCcw, Save, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Cpu, Eye, HardDrive, Loader2, RefreshCcw, Save, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import {
   getApiErrorMessage,
   pcBuilderApi,
+  productApi,
+  type PcBuilderAvailableVariant,
   type PcBuilderOption,
   type PcBuilderOptionsData,
+  type PcBuilderOptionsRequest,
   type PcBuilderSelection,
+  type PcBuilderSelectionPayload,
   type PcBuilderSlot,
   type PcBuilderSlotKey,
   type PcBuilderSummaryData,
   type PcBuilderWarning,
+  type Product,
 } from '../api/j2ee';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { getProductDetailPath } from '../utils/productSlug';
 
 const SLOT_ORDER: PcBuilderSlotKey[] = [
   'cpu',
@@ -44,6 +50,12 @@ const WARNING_CODE_MESSAGES: Record<string, string> = {
   CASE_MAINBOARD_FORM_FACTOR_MISMATCH: 'Case không hỗ trợ form factor của Mainboard.',
   CASE_GPU_LENGTH_MISMATCH: 'Chiều dài VGA có thể vượt giới hạn của Case.',
   INCOMPLETE_BUILD: 'Cấu hình chưa đầy đủ tất cả linh kiện cần thiết.',
+  RAM_QUANTITY_EXCEEDS_MAINBOARD_SLOTS: 'So luong RAM vuot qua gioi han slot cua mainboard.',
+  RAM_VARIANT_OUT_OF_STOCK: 'Bien the RAM da chon khong du ton kho.',
+  RAM_MIXED_SPEC_WARNING: 'Cac thanh RAM co thong so khong dong nhat.',
+  VARIANT_NOT_FOUND: 'Bien the da chon khong ton tai.',
+  VARIANT_INACTIVE: 'Bien the da chon khong con hoat dong.',
+  VARIANT_OUT_OF_STOCK: 'Bien the da chon da het hang.',
 };
 
 const STORAGE_KEY = 'pc_builder_selection_v1';
@@ -57,6 +69,17 @@ const EMPTY_SELECTION: PcBuilderSelection = {
   psuId: null,
   caseId: null,
   coolingId: null,
+};
+
+const DEFAULT_SLOT_QUANTITIES: Record<PcBuilderSlotKey, number> = {
+  cpu: 1,
+  mainboard: 1,
+  ram: 1,
+  gpu: 1,
+  storage: 1,
+  psu: 1,
+  case: 1,
+  cooling: 1,
 };
 
 type SelectionIdKey = keyof PcBuilderSelection;
@@ -101,13 +124,171 @@ const parseSelectionFromStorage = (raw: string | null): PcBuilderSelection | nul
   }
 };
 
-const cacheKeyFor = (slot: PcBuilderSlotKey, selection: PcBuilderSelection) =>
-  `${slot}|${SLOT_ORDER.map((slotKey) => selection[SLOT_TO_ID_KEY[slotKey]] ?? 'x').join('-')}`;
-
 const severityClasses: Record<PcBuilderWarning['severity'], string> = {
   INFO: 'bg-sky-50 border-sky-200 text-sky-800',
   WARNING: 'bg-amber-50 border-amber-200 text-amber-900',
   ERROR: 'bg-rose-50 border-rose-200 text-rose-800',
+};
+
+const BASE_URL = import.meta.env.VITE_J2EE_API_URL || 'http://localhost:8080';
+
+const SLOT_SPEC_PRIORITY: Record<PcBuilderSlotKey, string[]> = {
+  cpu: ['socket', 'core_count', 'thread_count', 'base_clock', 'boost_clock', 'watt'],
+  mainboard: ['socket', 'ram_type', 'form_factor', 'chipset'],
+  ram: ['ram_type', 'capacity', 'speed', 'watt'],
+  gpu: ['vram', 'gpu_length', 'watt', 'boost_clock'],
+  storage: ['storage_type', 'capacity', 'interface', 'read_speed', 'write_speed'],
+  psu: ['watt', 'efficiency', 'form_factor'],
+  case: ['form_factor', 'max_gpu_length'],
+  cooling: ['cooling_type', 'socket_support', 'fan_size'],
+};
+
+type OptionTone = 'ok' | 'warning' | 'muted' | 'selected';
+
+const optionToneClass: Record<OptionTone, string> = {
+  ok: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+  warning: 'bg-amber-50 border-amber-200 text-amber-800',
+  muted: 'bg-slate-100 border-slate-200 text-slate-600',
+  selected: 'bg-indigo-50 border-indigo-200 text-indigo-700',
+};
+
+const resolveUrl = (url?: string | null) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${BASE_URL}${url}`;
+  return `${BASE_URL}/${url}`;
+};
+
+const getProductImage = (product?: Product | null) => {
+  if (!product) return '';
+  const primary = (product.media || []).find((item) => item.mediaType === 'IMAGE' && item.isPrimary);
+  const fallback = (product.media || []).find((item) => item.mediaType === 'IMAGE');
+  return resolveUrl(primary?.mediaUrl || fallback?.mediaUrl || '');
+};
+
+const isTruthySpecValue = (value: string | number | boolean | null | undefined) => {
+  if (value == null) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  return true;
+};
+
+const normalizeSpecKey = (raw: string) => raw.trim().toLowerCase();
+
+const findSpecValueByCandidates = (
+  keySpecs: Record<string, string | number | boolean | null>,
+  candidates: string[]
+) => {
+  const entries = Object.entries(keySpecs || {});
+  for (const candidate of candidates) {
+    const candidateKey = normalizeSpecKey(candidate);
+    const found = entries.find(([key, value]) => normalizeSpecKey(key) === candidateKey && isTruthySpecValue(value));
+    if (found) return found[1];
+  }
+  return null;
+};
+
+const toNumber = (value: string | number | boolean | null) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/[^0-9.]/g, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toReadableSpecLabel = (key: string) =>
+  key
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const topSpecsFromOption = (option: PcBuilderOption, slot: PcBuilderSlotKey, limit = 4) => {
+  const entries = Object.entries(option.keySpecs || {});
+  const priority = SLOT_SPEC_PRIORITY[slot] || [];
+  const selected: Array<{ key: string; value: string | number | boolean | null }> = [];
+
+  for (const key of priority) {
+    if (selected.length >= limit) break;
+    const found = entries.find(([entryKey, value]) => normalizeSpecKey(entryKey) === normalizeSpecKey(key) && isTruthySpecValue(value));
+    if (found && !selected.some((item) => normalizeSpecKey(item.key) === normalizeSpecKey(found[0]))) {
+      selected.push({ key: found[0], value: found[1] });
+    }
+  }
+
+  for (const [key, value] of entries) {
+    if (selected.length >= limit) break;
+    if (!isTruthySpecValue(value)) continue;
+    if (selected.some((item) => normalizeSpecKey(item.key) === normalizeSpecKey(key))) continue;
+    selected.push({ key, value });
+  }
+
+  return selected;
+};
+
+const topSpecsFromProduct = (product: Product | null | undefined, limit = 6) => {
+  if (!product) return [];
+  const ordered = [...(product.specifications || [])].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  return ordered
+    .map((spec) => {
+      const label = spec.attributeDefinition?.name || spec.specKey || 'Spec';
+      const valueRaw = spec.specValue || (spec.valueNumber != null ? String(spec.valueNumber) : '');
+      if (!valueRaw) return null;
+      const unit = spec.attributeDefinition?.unit ? ` ${spec.attributeDefinition.unit}` : '';
+      return { label, value: `${valueRaw}${unit}` };
+    })
+    .filter((item): item is { label: string; value: string } => Boolean(item))
+    .slice(0, limit);
+};
+
+const formatVariantPrice = (price: number, fallbackPrice: number) =>
+  Number.isFinite(price) && price > 0 ? price : fallbackPrice;
+
+const getOptionStatus = (
+  option: PcBuilderOption,
+  slot: PcBuilderSlotKey,
+  isSelected: boolean,
+  optionsData: PcBuilderOptionsData | null
+) => {
+  if (option.compatibility) {
+    if (option.compatibility.status === 'INCOMPATIBLE') {
+      return {
+        tone: 'muted' as OptionTone,
+        label: 'Khong phu hop',
+        reason: option.compatibility.reasons?.[0] || 'Khong dat dieu kien tuong thich.',
+      };
+    }
+
+    if (option.compatibility.status === 'WARNING') {
+      return {
+        tone: 'warning' as OptionTone,
+        label: 'Can luu y',
+        reason: option.compatibility.reasons?.[0] || 'Can kiem tra them truoc khi chon.',
+      };
+    }
+  }
+
+  if (isSelected) {
+    return { tone: 'selected' as OptionTone, label: 'Đã chọn', reason: 'Linh kiện đang được chọn cho slot này.' };
+  }
+
+  if (option.stockQuantity <= 0) {
+    return { tone: 'muted' as OptionTone, label: 'Hết hàng', reason: 'Sản phẩm hiện không còn tồn kho.' };
+  }
+
+  if (slot === 'psu') {
+    const wattValue = findSpecValueByCandidates(option.keySpecs || {}, ['watt', 'power', 'psu_watt']);
+    const watt = toNumber(wattValue);
+    if (watt != null && optionsData?.recommendedPsuWatt && watt < optionsData.recommendedPsuWatt) {
+      return {
+        tone: 'warning' as OptionTone,
+        label: 'Cần lưu ý',
+        reason: `PSU ${watt}W thấp hơn mức khuyến nghị ${optionsData.recommendedPsuWatt}W.`,
+      };
+    }
+  }
+
+  return { tone: 'ok' as OptionTone, label: 'Tương thích', reason: 'Đạt bộ lọc tương thích hiện tại.' };
 };
 
 export default function PcBuilderPage() {
@@ -128,6 +309,19 @@ export default function PcBuilderPage() {
   const [localMsg, setLocalMsg] = useState('');
   const [continueMsg, setContinueMsg] = useState('');
   const [continuing, setContinuing] = useState(false);
+  const [quickViewProductId, setQuickViewProductId] = useState<number | null>(null);
+  const [productDetailCache, setProductDetailCache] = useState<Record<number, Product>>({});
+  const [loadingProductDetailId, setLoadingProductDetailId] = useState<number | null>(null);
+  const [productDetailError, setProductDetailError] = useState('');
+  const [slotQuantities, setSlotQuantities] = useState<Record<PcBuilderSlotKey, number>>(DEFAULT_SLOT_QUANTITIES);
+  const [selectedVariantBySlot, setSelectedVariantBySlot] = useState<
+    Partial<Record<PcBuilderSlotKey, { variantId: number | null; label: string; price: number }>>
+  >({});
+  const [variantPicker, setVariantPicker] = useState<{
+    slot: PcBuilderSlotKey;
+    option: PcBuilderOption;
+    variants: PcBuilderAvailableVariant[];
+  } | null>(null);
 
   useEffect(() => {
     const cached = parseSelectionFromStorage(localStorage.getItem(STORAGE_KEY));
@@ -156,13 +350,46 @@ export default function PcBuilderPage() {
       .finally(() => setLoadingSlots(false));
   }, []);
 
+  const builderSelectionPayload = useMemo<PcBuilderSelectionPayload>(() => {
+    const makeItem = (slot: Exclude<PcBuilderSlotKey, 'ram'>) => {
+      const productId = selection[SLOT_TO_ID_KEY[slot]];
+      if (!productId) return null;
+      return {
+        productId,
+        variantId: selectedVariantBySlot[slot]?.variantId ?? null,
+        quantity: slotQuantities[slot] || 1,
+      };
+    };
+
+    const ramSelections = selection.ramId
+      ? [
+          {
+            productId: selection.ramId,
+            variantId: selectedVariantBySlot.ram?.variantId ?? null,
+            quantity: slotQuantities.ram || 1,
+          },
+        ]
+      : [];
+
+    return {
+      cpu: makeItem('cpu'),
+      mainboard: makeItem('mainboard'),
+      gpu: makeItem('gpu'),
+      storage: makeItem('storage'),
+      psu: makeItem('psu'),
+      case: makeItem('case'),
+      cooling: makeItem('cooling'),
+      ramSelections,
+    };
+  }, [selection, selectedVariantBySlot, slotQuantities]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setLoadingSummary(true);
       setSummaryError('');
 
       pcBuilderApi
-        .getSummary(selection)
+        .getSummary(builderSelectionPayload)
         .then((res) => setSummary(res.data.data))
         .catch((err) => {
           setSummaryError(getApiErrorMessage(err, 'Không tải được tổng quan cấu hình.'));
@@ -172,10 +399,11 @@ export default function PcBuilderPage() {
     }, 220);
 
     return () => window.clearTimeout(timer);
-  }, [selection]);
+  }, [builderSelectionPayload]);
 
   useEffect(() => {
-    const key = cacheKeyFor(activeSlot, selection);
+    const request: PcBuilderOptionsRequest = { slot: activeSlot, selection: builderSelectionPayload };
+    const key = `${activeSlot}|${JSON.stringify(request.selection)}`;
     if (optionsCache[key]) {
       setOptionsError('');
       return;
@@ -185,7 +413,7 @@ export default function PcBuilderPage() {
     setOptionsError('');
 
     pcBuilderApi
-      .getOptions(activeSlot, selection)
+      .getOptions(request)
       .then((res) => {
         const data = res.data.data;
         setOptionsCache((prev) => ({ ...prev, [key]: data }));
@@ -194,11 +422,11 @@ export default function PcBuilderPage() {
         setOptionsError(getApiErrorMessage(err, 'Không tải được danh sách lựa chọn.'));
       })
       .finally(() => setLoadingOptions(false));
-  }, [activeSlot, selection, optionsCache]);
+  }, [activeSlot, builderSelectionPayload, optionsCache]);
 
   const currentOptionsData = useMemo(
-    () => optionsCache[cacheKeyFor(activeSlot, selection)] || null,
-    [activeSlot, optionsCache, selection]
+    () => optionsCache[`${activeSlot}|${JSON.stringify(builderSelectionPayload)}`] || null,
+    [activeSlot, builderSelectionPayload, optionsCache]
   );
 
   const selectedPartNameMap = useMemo(() => {
@@ -209,6 +437,20 @@ export default function PcBuilderPage() {
       map[slot] = part.name;
     }
     return map;
+  }, [summary]);
+
+  const selectedPartMap = useMemo(() => {
+    const map: Partial<Record<PcBuilderSlotKey, { productId: number; name: string; price: number }>> = {};
+    for (const part of summary?.selectedParts || []) {
+      const slot = normalizeSlotKey(part.slotKey || part.slot);
+      if (!slot) continue;
+      map[slot] = { productId: part.productId, name: part.name, price: part.price };
+    }
+    return map;
+  }, [summary]);
+
+  const selectedProductIds = useMemo(() => {
+    return Array.from(new Set((summary?.selectedParts || []).map((part) => part.productId).filter((id) => Number.isFinite(id))));
   }, [summary]);
 
   const hasBlockingError = useMemo(
@@ -231,6 +473,72 @@ export default function PcBuilderPage() {
 
   const continueDisabled = Boolean(continueDisabledReason);
 
+  useEffect(() => {
+    const missingIds = selectedProductIds.filter((id) => !productDetailCache[id]);
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+
+    Promise.all(
+      missingIds.map(async (productId) => {
+        try {
+          const res = await productApi.getById(productId);
+          return res.data.data;
+        } catch {
+          return null;
+        }
+      })
+    ).then((products) => {
+      if (cancelled) return;
+      const next: Record<number, Product> = {};
+      for (const item of products) {
+        if (item) next[item.id] = item;
+      }
+      if (Object.keys(next).length > 0) {
+        setProductDetailCache((prev) => ({ ...prev, ...next }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productDetailCache, selectedProductIds]);
+
+  const loadProductDetail = async (productId: number) => {
+    if (productDetailCache[productId]) {
+      return productDetailCache[productId];
+    }
+
+    try {
+      setLoadingProductDetailId(productId);
+      setProductDetailError('');
+      const res = await productApi.getById(productId);
+      const data = res.data.data;
+      if (!data) {
+        throw new Error('Thiếu dữ liệu sản phẩm.');
+      }
+      setProductDetailCache((prev) => ({ ...prev, [data.id]: data }));
+      return data;
+    } catch (err) {
+      setProductDetailError(getApiErrorMessage(err, 'Không tải được chi tiết sản phẩm.'));
+      return null;
+    } finally {
+      setLoadingProductDetailId((prev) => (prev === productId ? null : prev));
+    }
+  };
+
+  const openQuickView = (productId: number) => {
+    setQuickViewProductId(productId);
+    void loadProductDetail(productId);
+  };
+
+  const closeQuickView = () => {
+    setQuickViewProductId(null);
+    setProductDetailError('');
+  };
+
+  const quickViewProduct = quickViewProductId != null ? productDetailCache[quickViewProductId] || null : null;
+
   const applySelection = (slot: PcBuilderSlotKey, productId: number | null) => {
     setSelection((prev) => {
       const next: PcBuilderSelection = { ...prev, [SLOT_TO_ID_KEY[slot]]: productId };
@@ -247,8 +555,64 @@ export default function PcBuilderPage() {
       return next;
     });
 
+    setSelectedVariantBySlot((prev) => {
+      const next = { ...prev };
+      if (productId == null) {
+        delete next[slot];
+      }
+
+      if (slot === 'cpu') {
+        delete next.mainboard;
+        delete next.ram;
+      }
+
+      if (slot === 'mainboard') {
+        delete next.ram;
+      }
+
+      return next;
+    });
+
+    setSlotQuantities((prev) => {
+      const next = { ...prev };
+      if (productId == null) {
+        next[slot] = 1;
+      }
+
+      if (slot === 'cpu') {
+        next.mainboard = 1;
+        next.ram = 1;
+      }
+
+      if (slot === 'mainboard') {
+        next.ram = 1;
+      }
+
+      return next;
+    });
+
     setLocalMsg('');
     setContinueMsg('');
+  };
+
+  const handleChooseOption = (slot: PcBuilderSlotKey, option: PcBuilderOption, isSelected: boolean) => {
+    if (isSelected) {
+      applySelection(slot, null);
+      return;
+    }
+
+    const variants = option.availableVariants || [];
+    if (!option.hasVariants || variants.length === 0) {
+      applySelection(slot, option.productId);
+      setSelectedVariantBySlot((prev) => {
+        const next = { ...prev };
+        delete next[slot];
+        return next;
+      });
+      return;
+    }
+
+    setVariantPicker({ slot, option, variants });
   };
 
   const saveLocalBuild = () => {
@@ -269,8 +633,12 @@ export default function PcBuilderPage() {
 
   const resetBuild = () => {
     setSelection(EMPTY_SELECTION);
+    setSlotQuantities(DEFAULT_SLOT_QUANTITIES);
+    setSelectedVariantBySlot({});
     setLocalMsg('Đã reset cấu hình.');
     setContinueMsg('');
+    closeQuickView();
+    setVariantPicker(null);
   };
 
   const selectionForSlot = (slot: PcBuilderSlotKey) => selection[SLOT_TO_ID_KEY[slot]];
@@ -293,22 +661,20 @@ export default function PcBuilderPage() {
       return;
     }
 
-    const selectedIds = Array.from(
-      new Set((summary?.selectedParts || []).map((part) => part.productId).filter((id) => Number.isFinite(id)))
-    );
-
-    if (selectedIds.length === 0) {
-      setContinueMsg('Không tìm thấy linh kiện đã chọn để đưa vào giỏ hàng.');
-      return;
-    }
-
     try {
       setContinuing(true);
       setContinueMsg('Đang thêm cấu hình vào giỏ hàng...');
 
+      const previewRes = await pcBuilderApi.getCheckoutPreview(builderSelectionPayload);
+      const previewItems = previewRes.data.data || [];
+      if (previewItems.length === 0) {
+        setContinueMsg('Không tìm thấy linh kiện đã chọn để đưa vào giỏ hàng.');
+        return;
+      }
+
       await clearCart();
-      for (const productId of selectedIds) {
-        await addToCart(productId, 1);
+      for (const item of previewItems) {
+        await addToCart(item.productId, item.quantity, item.variantId ?? undefined);
       }
 
       setContinueMsg('Đã thêm build vào giỏ hàng. Đang chuyển sang trang checkout...');
@@ -378,6 +744,10 @@ export default function PcBuilderPage() {
                 {slots.map((slot, index) => {
                   const chosenId = selectionForSlot(slot.key);
                   const chosenName = selectedPartNameMap[slot.key];
+                  const selectedPart = selectedPartMap[slot.key];
+                  const selectedProduct = selectedPart ? productDetailCache[selectedPart.productId] : null;
+                  const imageUrl = getProductImage(selectedProduct);
+                  const selectedSpecs = topSpecsFromProduct(selectedProduct, 3);
                   const isActive = activeSlot === slot.key;
 
                   return (
@@ -394,9 +764,63 @@ export default function PcBuilderPage() {
                         <div>
                           <p className="text-xs text-slate-500">Bước {index + 1}</p>
                           <p className="text-sm font-semibold text-slate-800">{slot.label || FALLBACK_SLOT_LABELS[slot.key]}</p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            {chosenId ? chosenName || `Đã chọn #${chosenId}` : 'Chưa chọn linh kiện'}
-                          </p>
+                          <p className="text-xs text-slate-500 mt-1">{chosenId ? chosenName || `Đã chọn #${chosenId}` : 'Chưa chọn linh kiện'}</p>
+                          {selectedPart && (
+                            <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
+                              <div className="flex items-start gap-2">
+                                <div className="w-11 h-11 rounded-md overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                                  {imageUrl ? (
+                                    <img src={imageUrl} alt={selectedPart.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-[10px] text-slate-400">No img</div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-semibold text-slate-800 line-clamp-2">{selectedPart.name}</p>
+                                  <p className="text-[11px] text-slate-600 mt-0.5">{formatCurrency(selectedPart.price)}</p>
+                                </div>
+                              </div>
+                              {selectedSpecs.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {selectedSpecs.map((spec) => (
+                                    <span key={`${slot.key}-${spec.label}`} className="text-[10px] bg-slate-100 text-slate-700 rounded-full px-2 py-0.5">
+                                      {spec.label}: {spec.value}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openQuickView(selectedPart.productId);
+                                  }}
+                                  className="text-[11px] px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                                >
+                                  Xem nhanh
+                                </button>
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigate(getProductDetailPath({ id: selectedPart.productId, name: selectedPart.name }));
+                                  }}
+                                  className="text-[11px] px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+                                >
+                                  Chi tiết
+                                </button>
+                              </div>
+                              {selectedVariantBySlot[slot.key] && (
+                                <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md px-2 py-1">
+                                  Biến thể: {selectedVariantBySlot[slot.key]?.label}
+                                </p>
+                              )}
+                              {slot.key === 'ram' && selectedPart && (
+                                <p className="text-[11px] text-slate-600">
+                                  Số lượng RAM: <span className="font-semibold">{slotQuantities.ram}</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <span className="text-[11px] text-slate-500 bg-slate-100 rounded-full px-2 py-1">
                           {slot.productCount}
@@ -514,6 +938,30 @@ export default function PcBuilderPage() {
             )}
           </div>
 
+          {activeSlot === 'ram' && selectionForSlot('ram') && (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">RAM quantity</p>
+                <p className="text-sm font-medium text-slate-800">Số thanh RAM cho cấu hình</p>
+              </div>
+              <div className="inline-flex items-center gap-2">
+                <button
+                  onClick={() => setSlotQuantities((prev) => ({ ...prev, ram: Math.max(1, prev.ram - 1) }))}
+                  className="w-8 h-8 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                >
+                  -
+                </button>
+                <span className="w-8 text-center text-sm font-semibold text-slate-800">{slotQuantities.ram}</span>
+                <button
+                  onClick={() => setSlotQuantities((prev) => ({ ...prev, ram: Math.min(4, prev.ram + 1) }))}
+                  className="w-8 h-8 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3">
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <HardDrive className="w-4 h-4" />
@@ -567,6 +1015,8 @@ export default function PcBuilderPage() {
                   ) : (
                     (currentOptionsData?.options || []).map((option: PcBuilderOption) => {
                       const isSelected = selectionForSlot(activeSlot) === option.productId;
+                      const optionStatus = getOptionStatus(option, activeSlot, isSelected, currentOptionsData);
+                      const topSpecs = topSpecsFromOption(option, activeSlot, 4);
                       return (
                         <tr key={option.productId} className="border-t border-slate-100">
                           <td className="px-3 py-3">
@@ -574,29 +1024,45 @@ export default function PcBuilderPage() {
                             <p className="text-xs text-slate-500 mt-0.5">
                               {(option.brandName || 'N/A')} • {(option.categoryName || 'N/A')}
                             </p>
+                            <div className="mt-1.5">
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${optionToneClass[optionStatus.tone]}`}>
+                                {optionStatus.label}
+                              </span>
+                              <p className="text-[11px] text-slate-500 mt-1">{optionStatus.reason}</p>
+                            </div>
                           </td>
                           <td className="px-3 py-3 font-semibold text-slate-900">{formatCurrency(option.price)}</td>
                           <td className="px-3 py-3 text-slate-600">{option.stockQuantity}</td>
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-1.5">
-                              {Object.entries(option.keySpecs || {}).slice(0, 4).map(([key, value]) => (
+                              {topSpecs.map(({ key, value }) => (
                                 <span key={key} className="text-xs bg-slate-100 text-slate-700 rounded-full px-2 py-1">
-                                  {key}: {String(value)}
+                                  {toReadableSpecLabel(key)}: {String(value)}
                                 </span>
                               ))}
                             </div>
                           </td>
                           <td className="px-3 py-3 text-right">
-                            <button
-                              onClick={() => applySelection(activeSlot, isSelected ? null : option.productId)}
-                              className={`inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                                isSelected
-                                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                              }`}
-                            >
-                              {isSelected ? 'Đã chọn' : 'Chọn'}
-                            </button>
+                            <div className="inline-flex flex-col items-stretch gap-2 w-[118px]">
+                              <button
+                                onClick={() => openQuickView(option.productId)}
+                                className="inline-flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Xem nhanh
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleChooseOption(activeSlot, option, isSelected);
+                                }}
+                                className={`inline-flex h-9 w-full items-center justify-center rounded-lg px-2 text-xs font-semibold transition-colors ${
+                                  isSelected
+                                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                }`}
+                              >
+                                {isSelected ? 'Đã chọn' : 'Chọn'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -608,6 +1074,164 @@ export default function PcBuilderPage() {
           )}
         </div>
       </section>
+
+      {quickViewProductId != null && (
+        <div className="fixed inset-0 z-40">
+          <div className="absolute inset-0 bg-slate-900/45" onClick={closeQuickView} />
+          <div className="absolute inset-x-0 bottom-0 sm:inset-auto sm:right-6 sm:top-6 sm:bottom-6 sm:w-[32rem] bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Quick View</p>
+                <p className="text-sm font-semibold text-slate-900">Chi tiết linh kiện</p>
+              </div>
+              <button
+                onClick={closeQuickView}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                aria-label="Đóng xem nhanh"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingProductDetailId === quickViewProductId && !quickViewProduct ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500 py-6">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Đang tải chi tiết sản phẩm...
+                </div>
+              ) : productDetailError && !quickViewProduct ? (
+                <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{productDetailError}</p>
+              ) : quickViewProduct ? (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                    {getProductImage(quickViewProduct) ? (
+                      <img src={getProductImage(quickViewProduct)} alt={quickViewProduct.name} className="w-full h-52 object-cover" />
+                    ) : (
+                      <div className="w-full h-52 flex items-center justify-center text-sm text-slate-400">Khong co hinh anh</div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">{quickViewProduct.name}</h3>
+                    <p className="text-sm text-slate-600 mt-1">
+                      {(quickViewProduct.brand?.name || 'N/A')} • {(quickViewProduct.category?.name || 'N/A')}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg border border-slate-200 p-3 bg-white">
+                      <p className="text-xs text-slate-500">Giá</p>
+                      <p className="font-semibold text-slate-900">{formatCurrency(quickViewProduct.price)}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-3 bg-white">
+                      <p className="text-xs text-slate-500">Tồn kho</p>
+                      <p className="font-semibold text-slate-900">{quickViewProduct.stockQuantity}</p>
+                    </div>
+                  </div>
+
+                  {quickViewProduct.description && (
+                    <div className="rounded-lg border border-slate-200 p-3 bg-white">
+                      <p className="text-xs font-semibold text-slate-600 uppercase tracking-[0.08em]">Mô tả</p>
+                      <p className="text-sm text-slate-700 mt-1 whitespace-pre-line">{quickViewProduct.description}</p>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg border border-slate-200 p-3 bg-white">
+                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-[0.08em] mb-2">Thông số chính</p>
+                    {topSpecsFromProduct(quickViewProduct, 12).length === 0 ? (
+                      <p className="text-sm text-slate-500">Chưa có thông số chi tiết.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {topSpecsFromProduct(quickViewProduct, 12).map((spec) => (
+                          <div key={`${quickViewProduct.id}-${spec.label}`} className="flex items-start justify-between gap-3 text-sm">
+                            <span className="text-slate-500">{spec.label}</span>
+                            <span className="text-slate-800 text-right">{spec.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {quickViewProduct && (
+              <div className="border-t border-slate-200 p-4 flex flex-wrap justify-end gap-2 bg-white">
+                <button
+                  onClick={() => {
+                    const slotForQuickView = activeSlot;
+                    applySelection(slotForQuickView, quickViewProduct.id);
+                    closeQuickView();
+                  }}
+                  className="inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  Chọn linh kiện này
+                </button>
+                <button
+                  onClick={() => navigate(getProductDetailPath({ id: quickViewProduct.id, name: quickViewProduct.name }))}
+                  className="inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50"
+                >
+                  Xem trang chi tiết
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {variantPicker && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-slate-900/45" onClick={() => setVariantPicker(null)} />
+          <div className="absolute inset-x-0 bottom-0 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[44rem] bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Variant picker</p>
+                <p className="text-sm font-semibold text-slate-900 line-clamp-1">{variantPicker.option.name}</p>
+              </div>
+              <button
+                onClick={() => setVariantPicker(null)}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50"
+                aria-label="Đóng chọn biến thể"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-4 space-y-2">
+              {variantPicker.variants.length === 0 ? (
+                <p className="text-sm text-slate-500">Sản phẩm này chưa có biến thể khả dụng.</p>
+              ) : (
+                variantPicker.variants.map((variant) => {
+                  const label = variant.label || (variant.variantId == null ? 'San pham mac dinh' : `Variant #${variant.variantId}`);
+                  const displayPrice = formatVariantPrice(variant.price, variantPicker.option.price);
+                  return (
+                    <button
+                      key={`${variantPicker.option.productId}-${variant.variantId == null ? 'parent' : variant.variantId}`}
+                      onClick={() => {
+                        setSelectedVariantBySlot((prev) => ({
+                          ...prev,
+                          [variantPicker.slot]: {
+                            variantId: variant.variantId,
+                            label,
+                            price: displayPrice,
+                          },
+                        }));
+                        applySelection(variantPicker.slot, variantPicker.option.productId);
+                        setVariantPicker(null);
+                      }}
+                      className="w-full text-left rounded-xl border border-slate-200 bg-white hover:bg-slate-50 p-3"
+                    >
+                      <p className="text-sm font-semibold text-slate-800">{label}</p>
+                      <p className="text-xs text-slate-600 mt-1">
+                        Giá: {formatCurrency(displayPrice)} • Kho: {variant.stockQuantity}
+                      </p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

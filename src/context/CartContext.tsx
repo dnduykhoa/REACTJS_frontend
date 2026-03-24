@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { isAxiosError } from 'axios';
 import { cartApi } from '../api/j2ee/cartApi';
 import type { CartResponse } from '../api/j2ee/types';
 import { useAuth } from './AuthContext';
@@ -61,7 +62,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = async () => {
     if (!user) return;
-    await cartApi.clearCart(user.userId);
+    try {
+      await cartApi.clearCart(user.userId);
+    } catch (error) {
+      // Treat missing/already-empty cart as a successful clear operation.
+      if (!(isAxiosError(error) && (error.response?.status === 400 || error.response?.status === 404))) {
+        throw error;
+      }
+    }
     setCart(null);
   };
 
