@@ -551,7 +551,7 @@ export default function OrderDetailPage() {
             </Link>
           )}
           <a
-            href="mailto:support@techstore.vn"
+            href="mailto:support@gearlab.vn"
             className="flex items-center gap-2 bg-slate-50 text-slate-600 border border-slate-200 px-5 py-2.5 rounded-xl font-semibold hover:bg-slate-100 transition-colors text-sm"
           >
             <Headphones className="w-4 h-4" />

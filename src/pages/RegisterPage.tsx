@@ -101,7 +101,7 @@ export default function RegisterPage() {
             <Monitor className="w-6 h-6 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-slate-800">Tạo tài khoản</h2>
-          <p className="text-sm text-slate-500 mt-1">Đăng ký để mua sắm tại TechStore</p>
+          <p className="text-sm text-slate-500 mt-1">Đăng ký để mua sắm tại GearLab</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">

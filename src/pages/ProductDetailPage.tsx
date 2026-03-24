@@ -105,6 +105,27 @@ function buildVariantDisplayName(productName: string, variant: ProductVariant | 
   return optionParts.length > 0 ? `${productName} (${optionParts.join(', ')})` : productName;
 }
 
+function buildVariantOnlyName(variant: ProductVariant | null) {
+  if (!variant) return '';
+  if (variant.sku && variant.sku.trim() !== '') return variant.sku.trim();
+
+  const optionParts = (variant.values || [])
+    .map((value) => {
+      const rawValue = getVariantComparableValue(value);
+      if (!rawValue) return '';
+      const formatted = formatVariantOptionValue(
+        rawValue,
+        value.attributeDefinition?.dataType,
+        value.attributeDefinition?.unit
+      );
+      const label = value.attributeDefinition?.name || value.attrKey;
+      return label ? `${label}: ${formatted}` : formatted;
+    })
+    .filter(Boolean);
+
+  return optionParts.join(', ');
+}
+
 function resolveProductStatus(product: Product): ProductStatus {
   return product.status ?? (product.isActive ? (product.stockQuantity > 0 ? 'ACTIVE' : 'OUT_OF_STOCK') : 'INACTIVE');
 }
@@ -869,6 +890,46 @@ export default function ProductDetailPage() {
       ? (product.stockQuantity ?? 0)
       : 0;
   const inStock = effectivePurchasable;
+  const selectedVariantCompareName = selectedVariant
+    ? (buildVariantOnlyName(selectedVariant) || product.name)
+    : product.name;
+  const selectedVariantCompareStatus = selectedVariant
+    ? (!selectedVariant.isActive
+      ? 'INACTIVE'
+      : selectedVariant.stockQuantity > 0
+        ? 'ACTIVE'
+        : 'OUT_OF_STOCK')
+    : null;
+  const selectedVariantCompareImageUrl = selectedVariant
+    ? (resolveProductImage(selectedVariant.media) || resolveProductImage(product.media))
+    : null;
+
+  const selectedVariantCompareValuesByKey = new Map<string, string>();
+  for (const value of selectedVariant?.values || []) {
+    const rawValue = getVariantComparableValue(value);
+    if (!rawValue) continue;
+
+    const formattedValue = formatSpecDisplayValue(
+      rawValue,
+      value.attributeDefinition?.dataType,
+      value.attributeDefinition?.unit
+    );
+
+    const normalizedAttrKey = value.attrKey?.trim().toLowerCase();
+    if (normalizedAttrKey) {
+      selectedVariantCompareValuesByKey.set(normalizedAttrKey, formattedValue);
+    }
+
+    const normalizedDefAttrKey = value.attributeDefinition?.attrKey?.trim().toLowerCase();
+    if (normalizedDefAttrKey) {
+      selectedVariantCompareValuesByKey.set(normalizedDefAttrKey, formattedValue);
+    }
+
+    const normalizedDefName = value.attributeDefinition?.name?.trim().toLowerCase();
+    if (normalizedDefName) {
+      selectedVariantCompareValuesByKey.set(normalizedDefName, formattedValue);
+    }
+  }
 
   const handleToggleCompare = (targetId: number) => {
     if (targetId === product.id) return;
@@ -1164,7 +1225,7 @@ export default function ProductDetailPage() {
 
           {/* ── Commitments ── */}
           <div className="mt-6 bg-slate-50 rounded-xl p-4 space-y-3">
-            <h3 className="font-bold text-slate-800 text-base mb-3">TechStore cam kết</h3>
+            <h3 className="font-bold text-slate-800 text-base mb-3">GearLab cam kết</h3>
             
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -1526,11 +1587,24 @@ export default function ProductDetailPage() {
         ) : (
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {compareCandidates.map((item) => {
-              const imageUrl = resolveProductImage(item.media);
               const checked = selectedCompareSet.has(item.id);
               const isCurrent = item.id === product.id;
               const disableUnchecked = !checked && selectedCompareIds.length >= MAX_COMPARE_PRODUCTS;
-              const status = resolveProductStatus(item);
+              const imageUrl = isCurrent && selectedVariantCompareImageUrl
+                ? selectedVariantCompareImageUrl
+                : resolveProductImage(item.media);
+              const status = isCurrent && selectedVariantCompareStatus
+                ? selectedVariantCompareStatus
+                : resolveProductStatus(item);
+              const displayName = isCurrent && selectedVariant
+                ? selectedVariantCompareName
+                : item.name;
+              const displayPrice = isCurrent && selectedVariant
+                ? selectedVariant.price
+                : item.price;
+              const displayStockQuantity = isCurrent && selectedVariant
+                ? selectedVariant.stockQuantity
+                : item.stockQuantity;
 
               return (
                 <label
@@ -1551,19 +1625,19 @@ export default function ProductDetailPage() {
                     <div className="min-w-0 flex-1">
                       <div className="h-26 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-center overflow-hidden">
                         {imageUrl ? (
-                          <img src={resolveUrl(imageUrl)} alt={item.name} className="w-full h-full object-contain p-2" />
+                          <img src={resolveUrl(imageUrl)} alt={displayName} className="w-full h-full object-contain p-2" />
                         ) : (
                           <Package className="w-10 h-10 text-slate-200" />
                         )}
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-slate-800 line-clamp-2">{item.name}</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-800 line-clamp-2">{displayName}</p>
                       <p className="text-xs text-slate-500 mt-1">{item.brand?.name || 'N/A'}</p>
-                      <p className="text-sm font-bold text-[#e60012] mt-1">{Number(item.price).toLocaleString('vi-VN')}₫</p>
+                      <p className="text-sm font-bold text-[#e60012] mt-1">{Number(displayPrice).toLocaleString('vi-VN')}₫</p>
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <span className={`text-[11px] px-2 py-1 rounded-full font-medium ${getStatusClass(status)}`}>
                           {getStatusLabel(status)}
                         </span>
-                        <span className="text-xs text-slate-500">Kho: {item.stockQuantity}</span>
+                        <span className="text-xs text-slate-500">Kho: {displayStockQuantity}</span>
                       </div>
                     </div>
                   </div>
@@ -1590,26 +1664,47 @@ export default function ProductDetailPage() {
                     <th className="text-left px-4 py-3 font-semibold text-slate-700 w-60">Thuộc tính</th>
                     {compareData.products.map((compareProduct: CompareItem) => (
                       <th key={compareProduct.id} className="align-top text-left px-4 py-3 min-w-56 border-l border-slate-100">
+                        {(() => {
+                          const isCurrent = compareProduct.id === product.id;
+                          const displayName = isCurrent && selectedVariant
+                            ? selectedVariantCompareName
+                            : compareProduct.name;
+                          const displayPrice = isCurrent && selectedVariant
+                            ? selectedVariant.price
+                            : compareProduct.price;
+                          const displayStockQuantity = isCurrent && selectedVariant
+                            ? selectedVariant.stockQuantity
+                            : compareProduct.stockQuantity;
+                          const displayStatus = isCurrent && selectedVariantCompareStatus
+                            ? selectedVariantCompareStatus
+                            : compareProduct.status;
+                          const displayImageUrl = isCurrent && selectedVariantCompareImageUrl
+                            ? selectedVariantCompareImageUrl
+                            : compareProduct.imageUrl;
+
+                          return (
                         <div className="space-y-1">
                           <div className="h-20 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden">
-                            {compareProduct.imageUrl ? (
+                              {displayImageUrl ? (
                               <img
-                                src={resolveUrl(compareProduct.imageUrl)}
-                                alt={compareProduct.name}
+                                  src={resolveUrl(displayImageUrl)}
+                                  alt={displayName}
                                 className="w-full h-full object-contain p-2"
                               />
                             ) : (
                               <Package className="w-8 h-8 text-slate-200" />
                             )}
                           </div>
-                          <p className="font-semibold text-slate-800 line-clamp-2">{compareProduct.name}</p>
+                            <p className="font-semibold text-slate-800 line-clamp-2">{displayName}</p>
                           <p className="text-xs text-slate-500">{compareProduct.brandName || 'N/A'}</p>
-                          <p className="font-bold text-[#e60012]">{Number(compareProduct.price).toLocaleString('vi-VN')}₫</p>
-                          <p className="text-xs text-slate-500">Kho: {compareProduct.stockQuantity}</p>
-                          <span className={`inline-flex text-[11px] px-2 py-0.5 rounded-full font-medium ${getStatusClass(compareProduct.status)}`}>
-                            {getStatusLabel(compareProduct.status)}
+                            <p className="font-bold text-[#e60012]">{Number(displayPrice).toLocaleString('vi-VN')}₫</p>
+                            <p className="text-xs text-slate-500">Kho: {displayStockQuantity}</p>
+                            <span className={`inline-flex text-[11px] px-2 py-0.5 rounded-full font-medium ${getStatusClass(displayStatus)}`}>
+                              {getStatusLabel(displayStatus)}
                           </span>
                         </div>
+                          );
+                        })()}
                       </th>
                     ))}
                   </tr>
@@ -1622,7 +1717,12 @@ export default function ProductDetailPage() {
                         {row.unit ? <span className="text-slate-500 font-normal"> ({row.unit})</span> : null}
                       </td>
                       {compareData.products.map((compareProduct: CompareItem) => {
-                        const cellValue = row.values?.[String(compareProduct.id)] || '-';
+                        const normalizedRowAttrKey = row.attrKey?.trim().toLowerCase();
+                        const variantCellValue =
+                          compareProduct.id === product.id && normalizedRowAttrKey
+                            ? selectedVariantCompareValuesByKey.get(normalizedRowAttrKey)
+                            : undefined;
+                        const cellValue = variantCellValue || row.values?.[String(compareProduct.id)] || '-';
                         return (
                           <td key={`${row.attrKey}-${compareProduct.id}`} className="px-4 py-3 text-slate-700 border-l border-slate-100 whitespace-pre-line">
                             {cellValue}
@@ -1852,7 +1952,7 @@ export default function ProductDetailPage() {
                       <span className="text-sm font-semibold text-slate-700">{review.username}</span>
                       <div className="flex items-center gap-1 mt-0.5">
                         <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
-                        <span className="text-xs text-green-600 font-medium">Đã mua tại TechStore</span>
+                        <span className="text-xs text-green-600 font-medium">Đã mua tại GearLab</span>
                       </div>
                     </div>
                   </div>
@@ -1894,7 +1994,7 @@ export default function ProductDetailPage() {
                 )}
                 {review.reply && (
                   <div className="mt-3 pl-3 border-l-2 border-indigo-300 bg-indigo-50/60 rounded-r-lg py-2.5 pr-3">
-                    <p className="text-xs font-semibold text-indigo-600 mb-1">Phản hồi từ TechStore</p>
+                    <p className="text-xs font-semibold text-indigo-600 mb-1">Phản hồi từ GearLab</p>
                     <p className="text-sm text-slate-700 leading-relaxed">{review.reply}</p>
                   </div>
                 )}

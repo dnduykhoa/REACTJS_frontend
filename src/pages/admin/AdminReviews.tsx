@@ -63,9 +63,9 @@ export default function AdminReviews() {
 
   const DEFAULT_REPLIES = [
     'Cảm ơn bạn đã tin tưởng và đánh giá sản phẩm! Chúng tôi rất vui khi sản phẩm đáp ứng được kỳ vọng của bạn.',
-    'Cảm ơn bạn đã dành thời gian chia sẻ trải nghiệm. Phản hồi của bạn giúp TechStore không ngừng cải thiện!',
+    'Cảm ơn bạn đã dành thời gian chia sẻ trải nghiệm. Phản hồi của bạn giúp GearLab không ngừng cải thiện!',
     'Chúng tôi rất tiếc về trải nghiệm chưa tốt của bạn. Vui lòng liên hệ hotline để được hỗ trợ giải quyết sớm nhất.',
-    'Chúc bạn trải nghiệm thật vui vẻ với sản phẩm! Hẹn gặp lại bạn tại TechStore.',
+    'Chúc bạn trải nghiệm thật vui vẻ với sản phẩm! Hẹn gặp lại bạn tại GearLab.',
   ];
 
   const fetchReviews = useCallback(() => {
@@ -490,7 +490,7 @@ export default function AdminReviews() {
                               rows={3}
                               value={replyText}
                               onChange={(e) => setReplyText(e.target.value)}
-                              placeholder={review.reply ? 'Sửa nội dung phản hồi... (để trống để xóa phản hồi)' : 'Nhập phản hồi của TechStore...'}
+                              placeholder={review.reply ? 'Sửa nội dung phản hồi... (để trống để xóa phản hồi)' : 'Nhập phản hồi của GearLab...'}
                               className="w-full px-3 py-2.5 text-sm border border-indigo-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white resize-none leading-relaxed"
                             />
                             {/* Actions */}

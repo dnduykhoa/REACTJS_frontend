@@ -12,7 +12,7 @@ export default function Footer() {
               <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <Monitor className="w-4 h-4 text-white" />
               </div>
-              TechStore
+              GearLab
             </div>
             <p className="text-sm text-slate-400 leading-relaxed">
               Cửa hàng công nghệ uy tín — laptop, điện thoại,
@@ -21,7 +21,7 @@ export default function Footer() {
             <div className="mt-4 space-y-2 text-xs text-slate-500">
               <div className="flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5" />
-                <span>support@techstore.vn</span>
+                <span>support@gearlab.vn</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5" />
@@ -58,7 +58,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} TechStore. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} GearLab. All rights reserved.</p>
           <p>Được xây dựng bởi Nhóm 05 — J2EE Project</p>
         </div>
       </div>

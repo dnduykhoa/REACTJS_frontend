@@ -185,7 +185,7 @@ export default function CheckoutPage() {
           const { latitude, longitude } = pos.coords;
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=vi`,
-            { headers: { 'User-Agent': 'TechStore/1.0' } }
+            { headers: { 'User-Agent': 'GearLab/1.0' } }
           );
           const data = await res.json();
           const addr = data.address || {};

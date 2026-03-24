@@ -161,7 +161,7 @@ export default function AdminLayout() {
               <Monitor className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-white font-bold text-sm leading-tight">TechStore</p>
+              <p className="text-white font-bold text-sm leading-tight">GearLab</p>
               <p className="text-slate-400 text-xs">{panelTitle}</p>
             </div>
           </Link>

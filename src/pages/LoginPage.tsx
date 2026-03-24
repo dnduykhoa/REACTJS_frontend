@@ -93,7 +93,7 @@ export default function LoginPage() {
           <p className="text-sm text-slate-500 mt-1">
             {step === '2fa'
               ? 'Nhập mã xác thực đã được gửi đến email của bạn'
-              : 'Đăng nhập vào tài khoản TechStore của bạn'}
+              : 'Đăng nhập vào tài khoản GearLab của bạn'}
           </p>
         </div>
 
