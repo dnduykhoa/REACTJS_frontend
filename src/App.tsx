@@ -82,6 +82,7 @@ export default function App() {
             <Route path="vouchers" element={<AdminVouchers />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="preorders" element={<AdminPreorders />} />
+            <Route path="reviews" element={<AdminReviews />} />
           </Route>
 
           {/* Manager routes - /manager for Manager role */}
@@ -103,6 +104,7 @@ export default function App() {
             <Route path="vouchers" element={<AdminVouchers />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="preorders" element={<AdminPreorders />} />
+            <Route path="reviews" element={<AdminReviews />} />
           </Route>
 
           {/* Staff routes - /staff for Staff role */}
