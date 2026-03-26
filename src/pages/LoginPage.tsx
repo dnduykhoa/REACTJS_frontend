@@ -6,6 +6,15 @@ import type { LoginResponse, TwoFactorResponse } from '../api/j2ee/types';
 import { useAuth } from '../context/AuthContext';
 import { Monitor, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 
+const canRenderGoogleButton = () => {
+  if (typeof window === 'undefined') return false;
+  const isTopLevel = window.self === window.top;
+  const protocol = window.location.protocol;
+  const isHttpContext = protocol === 'http:' || protocol === 'https:';
+  const isAboutBlank = window.location.origin === 'null' || window.location.href.startsWith('about:blank');
+  return isTopLevel && isHttpContext && !isAboutBlank;
+};
+
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -19,6 +28,7 @@ export default function LoginPage() {
   const [step, setStep] = useState<'login' | '2fa'>('login');
   const [twoFactorEmailOrPhone, setTwoFactorEmailOrPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const allowGoogleSignIn = canRenderGoogleButton();
 
   const goToHome = (roles: string[]) => {
     const normalized = roles.map((role) => role.replace(/^ROLE_/, '').toUpperCase());
@@ -63,7 +73,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.verify2FA({ emailOrPhone: twoFactorEmailOrPhone, code: otpValue });
+      const res = await authApi.verify2FA({ emailOrPhone: twoFactorEmailOrPhone, code: otpValue, rememberMe });
       const loginData = unwrapApiData<LoginResponse>(res.data);
       login(loginData, rememberMe);
       goToHome(loginData.roles || []);
@@ -176,29 +186,35 @@ export default function LoginPage() {
 
               {/* Nút đăng nhập bằng Google */}
               <div className="flex justify-center">
-                <GoogleLogin
-                  onSuccess={async (credentialResponse) => {
-                    const idToken = credentialResponse.credential;
-                    if (!idToken) { setError('Không lấy được thông tin từ Google'); return; }
-                    setLoading(true);
-                    setError('');
-                    try {
-                      const res = await authApi.loginWithGoogle({ idToken });
-                      login(res.data.data, rememberMe);
-                      const roles: string[] = res.data.data?.roles || [];
-                      goToHome(roles);
-                    } catch (err: unknown) {
-                      setError(getApiErrorMessage(err, 'Đăng nhập Google thất bại'));
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  onError={() => setError('Đăng nhập Google thất bại')}
-                  width="368"
-                  text="signin_with"
-                  shape="rectangular"
-                  theme="outline"
-                />
+                {allowGoogleSignIn ? (
+                  <GoogleLogin
+                    onSuccess={async (credentialResponse) => {
+                      const idToken = credentialResponse.credential;
+                      if (!idToken) { setError('Không lấy được thông tin từ Google'); return; }
+                      setLoading(true);
+                      setError('');
+                      try {
+                        const res = await authApi.loginWithGoogle({ idToken });
+                        login(res.data.data, rememberMe);
+                        const roles: string[] = res.data.data?.roles || [];
+                        goToHome(roles);
+                      } catch (err: unknown) {
+                        setError(getApiErrorMessage(err, 'Đăng nhập Google thất bại'));
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    onError={() => setError('Đăng nhập Google thất bại')}
+                    width="368"
+                    text="signin_with"
+                    shape="rectangular"
+                    theme="outline"
+                  />
+                ) : (
+                  <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    Google Sign-In chỉ hoạt động ở top-level window (không phải iframe/about:blank). Origin hiện tại: {typeof window !== 'undefined' ? window.location.origin : 'unknown'}
+                  </div>
+                )}
               </div>
             </form>
           )}

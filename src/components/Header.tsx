@@ -123,13 +123,15 @@ export default function Header() {
                     >
                       <User className="w-4 h-4 text-slate-400" /> Hồ sơ của tôi
                     </Link>
-                    <Link
-                      to="/orders"
-                      onClick={() => setMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      <ShoppingBag className="w-4 h-4 text-slate-400" /> Đơn hàng của tôi
-                    </Link>
+                    {!canAccessAdmin && (
+                      <Link
+                        to="/orders"
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        <ShoppingBag className="w-4 h-4 text-slate-400" /> Đơn hàng của tôi
+                      </Link>
+                    )}
                     <Link
                       to={`/profile/${user.userId}/change-password`}
                       onClick={() => setMenuOpen(false)}
@@ -193,7 +195,9 @@ export default function Header() {
                   </Link>
                 )}
                 <Link to={`/profile/${user.userId}`} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Hồ sơ của tôi</Link>
-                <Link to="/orders" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"><ShoppingBag className="w-4 h-4" /> Đơn hàng của tôi</Link>
+                {!canAccessAdmin && (
+                  <Link to="/orders" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg"><ShoppingBag className="w-4 h-4" /> Đơn hàng của tôi</Link>
+                )}
                 <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 rounded-lg">Đăng xuất</button>
               </>
             ) : (

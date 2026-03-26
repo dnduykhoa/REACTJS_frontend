@@ -19,6 +19,7 @@ import {
   BadgePercent,
   MessageCircleQuestion,
   Star,
+  ShieldCheck,
 } from 'lucide-react';
 
 type AdminNavLink = {
@@ -36,6 +37,7 @@ const navLinkTemplates: Omit<AdminNavLink, 'to'>[] = [
   { label: 'Chờ hàng', icon: BellRing, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { label: 'Hỏi đáp SP', icon: MessageCircleQuestion, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { label: 'Người dùng', icon: Users, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { label: 'Thiết bị tin cậy', icon: ShieldCheck, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   { label: 'Danh mục', icon: Tag, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Thương hiệu', icon: Building2, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Nhóm thuộc tính', icon: Layers, roles: ['ADMIN', 'MANAGER'] },
@@ -54,6 +56,7 @@ const routePaths = [
   'preorders',
   'product-questions',
   'users',
+  'trusted-devices',
   'categories',
   'brands',
   'attribute-groups',
@@ -68,8 +71,9 @@ const routePaths = [
 const routeRules = [
   // /admin, /manager, /staff base paths
   { pattern: /^\/(?:admin|manager|staff)$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { pattern: /^\/(?:admin|manager|staff)\/trusted-devices(\/.*)?$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   // Products, orders, preorders, users, reviews accessible to all backoffice roles
-  { pattern: /^\/(?:admin|manager|staff)\/(products|orders|preorders|product-questions|users|reviews)(\/.*)?$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+  { pattern: /^\/(?:admin|manager|staff)\/(products|orders|preorders|product-questions|users|reviews|trusted-devices)(\/.*)?$/, roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   // Management features only for Admin/Manager
   {
     pattern: /^\/(?:admin|manager|staff)\/(categories|brands|attribute-groups|attribute-definitions|category-attributes|carousel|sale-programs|vouchers)(\/.*)?$/,
