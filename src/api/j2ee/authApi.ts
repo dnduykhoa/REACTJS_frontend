@@ -11,6 +11,8 @@ import type {
   GoogleLoginRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
+  RefreshTokenRequest,
+  TrustedDeviceResponse,
   UserProfileResponse,
 } from './types';
 
@@ -23,6 +25,12 @@ export const authApi = {
 
   verify2FA: (data: Verify2FARequest) =>
     apiClient.post<ApiResponse<LoginResponse>>('/api/auth/verify-2fa', data),
+
+  refresh: (data: RefreshTokenRequest) =>
+    apiClient.post<ApiResponse<LoginResponse>>('/api/auth/refresh', data),
+
+  logout: (data?: RefreshTokenRequest) =>
+    apiClient.post<ApiResponse<null>>('/api/auth/logout', data || {}),
 
   loginWithGoogle: (data: GoogleLoginRequest) =>
     apiClient.post<ApiResponse<LoginResponse>>('/api/auth/google', data),
@@ -65,4 +73,10 @@ export const authApi = {
 
   updateUserRoles: (id: number, roleNames: string[]) =>
     apiClient.put<ApiResponse<UserProfileResponse>>(`/api/users/${id}/roles`, roleNames),
+
+  getTrustedDevices: () =>
+    apiClient.get<ApiResponse<TrustedDeviceResponse[]>>('/api/admin/trusted-devices'),
+
+  revokeTrustedDevice: (sessionId: number) =>
+    apiClient.delete<ApiResponse<null>>(`/api/admin/trusted-devices/${sessionId}`),
 };
