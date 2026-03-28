@@ -16,7 +16,6 @@ export interface LoginRequest {
 export interface LoginResponse {
   message: string;
   token: string;
-  refreshToken?: string;
   userId: number;
   username: string;
   email: string;
@@ -58,11 +57,6 @@ export interface TwoFactorResponse {
 export interface Verify2FARequest {
   emailOrPhone: string;
   code: string;
-  rememberMe?: boolean;
-}
-
-export interface RefreshTokenRequest {
-  refreshToken: string;
 }
 
 export interface GoogleLoginRequest {
@@ -90,18 +84,6 @@ export interface UserProfileResponse {
   provider: string;
   twoFactorEnabled: boolean;
   roles: string[];
-}
-
-export interface TrustedDeviceResponse {
-  sessionId: number;
-  ownerUsername: string;
-  ownerEmail: string;
-  ownerRoles: string[];
-  deviceName: string;
-  ipAddress: string;
-  active: boolean;
-  createdAt: string;
-  lastSeenAt: string;
 }
 // ─── Carousel ─────────────────────────────────────────────────────────────────
 export interface CarouselSlide {

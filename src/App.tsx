@@ -38,7 +38,6 @@ import AdminSalePrograms from './pages/admin/AdminSalePrograms';
 import AdminVouchers from './pages/admin/AdminVouchers';
 import AdminProductQuestions from './pages/admin/AdminProductQuestions';
 import AdminReviews from './pages/admin/AdminReviews';
-import AdminTrustedDevices from './pages/admin/AdminTrustedDevices';
 
 export default function App() {
   return (
@@ -59,8 +58,8 @@ export default function App() {
             <Route path="/profile/:id/change-password" element={<ChangePasswordPage />} />
             <Route path="/cart" element={<ProtectedRoute customersOnly><CartPage /></ProtectedRoute>} />
             <Route path="/checkout" element={<ProtectedRoute customersOnly><CheckoutPage /></ProtectedRoute>} />
-            <Route path="/orders" element={<ProtectedRoute customersOnly><OrdersPage /></ProtectedRoute>} />
-            <Route path="/orders/:id" element={<ProtectedRoute customersOnly><OrderDetailPage /></ProtectedRoute>} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/pc-builder" element={<PcBuilderPage />} />
           </Route>
 
@@ -77,14 +76,12 @@ export default function App() {
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
             <Route path="category-attributes" element={<AdminCategoryAttributes />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />
             <Route path="vouchers" element={<AdminVouchers />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="preorders" element={<AdminPreorders />} />
-            <Route path="reviews" element={<AdminReviews />} />
           </Route>
 
           {/* Manager routes - /manager for Manager role */}
@@ -100,14 +97,12 @@ export default function App() {
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
             <Route path="category-attributes" element={<AdminCategoryAttributes />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />
             <Route path="vouchers" element={<AdminVouchers />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="preorders" element={<AdminPreorders />} />
-            <Route path="reviews" element={<AdminReviews />} />
           </Route>
 
           {/* Staff routes - /staff for Staff role */}
@@ -123,7 +118,6 @@ export default function App() {
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
             <Route path="category-attributes" element={<AdminCategoryAttributes />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />

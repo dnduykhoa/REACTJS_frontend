@@ -198,7 +198,7 @@ export default function AdminReviews() {
                 ))}
               </div>
               <span className="text-lg font-bold text-slate-800">{count}</span>
-              <p className="text-[11px] text-slate-400">Tổng</p>
+              <p className="text-[11px] text-slate-400">hiển thị</p>
             </div>
           ))}
         </div>
