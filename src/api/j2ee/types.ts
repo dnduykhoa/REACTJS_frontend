@@ -209,6 +209,27 @@ export interface CategoryAttribute {
   displayOrder: number;
 }
 
+export interface CategoryAttributeSchemaItem {
+  categoryAttributeId: number;
+  attrDefId: number;
+  attrKey: string;
+  attrName: string;
+  isRequired: boolean;
+  displayOrder: number;
+}
+
+export interface CategoryAttributeSchemaGroup {
+  groupId: number | null;
+  groupName: string;
+  groupDisplayOrder: number;
+  items: CategoryAttributeSchemaItem[];
+}
+
+export interface CategoryAttributeSchema {
+  categoryId: number;
+  groups: CategoryAttributeSchemaGroup[];
+}
+
 // ─── Product Media ────────────────────────────────────────────────────────────
 export interface ProductMedia {
   id: number;
