@@ -79,6 +79,7 @@ export default function App() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
+            <Route path="reviews" element={<AdminReviews />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />
             <Route path="vouchers" element={<AdminVouchers />} />
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
+            <Route path="reviews" element={<AdminReviews />} />
             <Route path="carousel" element={<AdminCarousel />} />
             <Route path="sale-programs" element={<AdminSalePrograms />} />
             <Route path="vouchers" element={<AdminVouchers />} />

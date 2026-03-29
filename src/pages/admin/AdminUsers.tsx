@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { authApi } from '../../api/j2ee';
 import type { UserProfileResponse } from '../../api/j2ee/types';
-import { Users, Search, Shield, X, AlertCircle } from 'lucide-react';
+import { Users, Search, Shield, X, AlertCircle, Power } from 'lucide-react';
 import Pagination from '../../components/Pagination';
 import { useAuth } from '../../context/AuthContext';
 
@@ -16,7 +16,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editingUser, setEditingUser] = useState<UserProfileResponse | null>(null);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedRole, setSelectedRole] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
@@ -51,14 +51,18 @@ export default function AdminUsers() {
     authApi.searchUsers(search).then((r) => setUsers(r.data.data)).finally(() => setLoading(false));
   };
 
-  const handleDelete = async (id: number) => {
+  const handleToggleActivation = async (user: UserProfileResponse) => {
     if (!canDeleteUsers) return;
-    if (!confirm('Xóa người dùng này?')) return;
+    const willActivate = !user.active;
+    const confirmMessage = willActivate
+      ? 'Kích hoạt lại tài khoản này?'
+      : 'Vô hiệu hóa tài khoản này? Người dùng sẽ không thể đăng nhập.';
+    if (!confirm(confirmMessage)) return;
     try {
-      await authApi.deleteUser(id);
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+      const res = await authApi.updateUserActivation(user.id, willActivate);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? res.data.data : u)));
     } catch (err: unknown) {
-      alert((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Xóa thất bại');
+      alert((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Cập nhật trạng thái thất bại');
     }
   };
 
@@ -67,8 +71,10 @@ export default function AdminUsers() {
       setError('Bạn không có quyền phân quyền cho tài khoản này');
       return;
     }
+    const normalizedRoles = user.roles.map(normalizeRole);
+    const preferredRole = normalizedRoles.find((role) => canAssignRole(role)) || normalizedRoles[0] || '';
     setEditingUser(user);
-    setSelectedRoles([...user.roles.map(normalizeRole)]);
+    setSelectedRole(preferredRole);
     setError('');
   };
 
@@ -79,15 +85,19 @@ export default function AdminUsers() {
       return;
     }
 
-    const invalidRoles = selectedRoles.filter((role) => !canAssignRole(role));
-    if (invalidRoles.length > 0) {
-      setError(`Bạn không thể gán role: ${invalidRoles.join(', ')}`);
+    if (!selectedRole) {
+      setError('Vui lòng chọn 1 role');
+      return;
+    }
+
+    if (!canAssignRole(selectedRole)) {
+      setError(`Bạn không thể gán role: ${selectedRole}`);
       return;
     }
 
     setSaving(true);
     try {
-      const res = await authApi.updateUserRoles(editingUser.id, selectedRoles);
+      const res = await authApi.updateUserRoles(editingUser.id, [selectedRole]);
       setUsers((prev) => prev.map((u) => (u.id === editingUser.id ? res.data.data : u)));
       setEditingUser(null);
     } catch (err: unknown) {
@@ -99,9 +109,7 @@ export default function AdminUsers() {
 
   const toggleRole = (role: string) => {
     if (!canAssignRole(role)) return;
-    setSelectedRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
-    );
+    setSelectedRole(role);
   };
 
   const roleBadgeClass = (r: string) =>
@@ -149,10 +157,11 @@ export default function AdminUsers() {
               {editableRoleOptions.map((role) => (
                 <label key={role} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition">
                   <input
-                    type="checkbox"
-                    checked={selectedRoles.includes(role)}
+                    type="radio"
+                    name="user-role"
+                    checked={selectedRole === role}
                     onChange={() => toggleRole(role)}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${roleBadgeClass(role)}`}>{role}</span>
                 </label>
@@ -181,13 +190,14 @@ export default function AdminUsers() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Họ tên</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Vai trò</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Provider</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Hành động</th>
               </tr>
             </thead>
             <tbody>
               {users.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-12 text-center">
+                <tr><td colSpan={8} className="px-4 py-12 text-center">
                   <Users size={32} className="mx-auto text-slate-300 mb-2" />
                   <p className="text-slate-400 text-sm">Không có người dùng</p>
                 </td></tr>
@@ -205,6 +215,11 @@ export default function AdminUsers() {
                       ))}
                     </div>
                   </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-full font-medium ${user.active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {user.active ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-500 capitalize">{user.provider}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
@@ -214,8 +229,12 @@ export default function AdminUsers() {
                         </button>
                       )}
                       {canDeleteUsers && !isReadOnlyUserView && (
-                        <button onClick={() => handleDelete(user.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors" title="Xóa">
-                          <X size={14} />
+                        <button
+                          onClick={() => handleToggleActivation(user)}
+                          className={`p-1.5 rounded-lg transition-colors ${user.active ? 'text-slate-500 hover:text-rose-600 hover:bg-rose-50' : 'text-slate-500 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                          title={user.active ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản'}
+                        >
+                          <Power size={14} />
                         </button>
                       )}
                       {!canManageRolesOfTarget(user) && (!canDeleteUsers || isReadOnlyUserView) && (

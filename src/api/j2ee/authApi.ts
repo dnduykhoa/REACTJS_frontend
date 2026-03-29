@@ -68,8 +68,10 @@ export const authApi = {
       params: { keyword },
     }),
 
-  deleteUser: (id: number) =>
-    apiClient.delete<ApiResponse<null>>(`/api/users/${id}`),
+  updateUserActivation: (id: number, active: boolean) =>
+    apiClient.patch<ApiResponse<UserProfileResponse>>(`/api/users/${id}/activation`, null, {
+      params: { active },
+    }),
 
   updateUserRoles: (id: number, roleNames: string[]) =>
     apiClient.put<ApiResponse<UserProfileResponse>>(`/api/users/${id}/roles`, roleNames),

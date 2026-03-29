@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ShieldCheck, Smartphone, Trash2, RefreshCw, Circle } from 'lucide-react';
 import { authApi, getApiErrorMessage, unwrapApiData } from '../../api/j2ee';
 import type { TrustedDeviceResponse } from '../../api/j2ee/types';
+import Pagination from '../../components/Pagination';
+
+const PAGE_SIZE = 12;
 
 const toVietnamTime = (dateInput: string | null | undefined) => {
   if (!dateInput) return '—';
@@ -24,6 +27,7 @@ export default function AdminTrustedDevices() {
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED'>('ALL');
   const [roleFilter, setRoleFilter] = useState<'ALL' | string>('ALL');
+  const [page, setPage] = useState(1);
 
   const loadDevices = async () => {
     setLoading(true);
@@ -32,6 +36,7 @@ export default function AdminTrustedDevices() {
       const res = await authApi.getTrustedDevices();
       const payload = unwrapApiData<TrustedDeviceResponse[]>(res.data);
       setDevices(payload || []);
+      setPage(1);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Không thể tải danh sách thiết bị tin cậy'));
     } finally {
@@ -69,7 +74,7 @@ export default function AdminTrustedDevices() {
     )
   ).sort((firstRole, secondRole) => firstRole.localeCompare(secondRole));
 
-  const filteredDevices = devices.filter((device) => {
+  const filteredDevices = useMemo(() => devices.filter((device) => {
     const matchedStatus =
       statusFilter === 'ALL' ||
       (statusFilter === 'ACTIVE' && device.active) ||
@@ -85,7 +90,25 @@ export default function AdminTrustedDevices() {
 
     const deviceRoles = (device.ownerRoles || []).map((role) => role.replace(/^ROLE_/, '').toUpperCase());
     return deviceRoles.includes(roleFilter);
-  });
+  }), [devices, statusFilter, roleFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, roleFilter]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(filteredDevices.length / PAGE_SIZE));
+    if (page > maxPage) {
+      setPage(maxPage);
+    }
+  }, [filteredDevices.length, page]);
+
+  const pagedDevices = useMemo(
+    () => filteredDevices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredDevices, page]
+  );
+
+  const pageCount = Math.ceil(filteredDevices.length / PAGE_SIZE);
 
   return (
     <div className="space-y-5">
@@ -155,7 +178,7 @@ export default function AdminTrustedDevices() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDevices.map((device) => (
+                {pagedDevices.map((device) => (
                   <tr key={device.sessionId} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-slate-700">
                       <div className="flex flex-col">
@@ -204,6 +227,13 @@ export default function AdminTrustedDevices() {
               </tbody>
             </table>
           )}
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            total={filteredDevices.length}
+            pageSize={PAGE_SIZE}
+            onChange={setPage}
+          />
         </div>
       )}
     </div>

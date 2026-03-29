@@ -1,0 +1,95 @@
+[33m2722ab1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m update auth mode
+[33m5b131be[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Remove trusted-devices & refresh logic
+[33m08c94ac[m Revert "Update .env"
+[33ma6b2893[m Merge branch 'main' of https://github.com/dnduykhoa/REACTJS_frontend
+[33m1aa57f1[m Update .env
+[33m0c1f9c2[m Merge pull request #35 from dnduykhoa/updateauth
+[33m6371f66[m[33m ([m[1;31morigin/updateauth[m[33m, [m[1;32mupdateauth[m[33m)[m update auth mode
+[33m65a9562[m rv
+[33m85e73dd[m fix route review
+[33m1364b0d[m PC Builder: quick view, variants & preview
+[33m0e8db81[m fix product card
+[33mbf3a0fb[m SuaFE
+[33mc4165fa[m Add product comparison & build checkout flow
+[33m2071a66[m Merge pull request #34 from dnduykhoa/feature-buildpc
+[33m542a4d1[m Add PC Builder feature; admin search & paging
+[33m4b4e37c[m Merge pull request #33 from dnduykhoa/testbr33
+[33m380123b[m[33m ([m[1;31morigin/testbr33[m[33m, [m[1;32mtestbr33[m[33m)[m Merge branch 'fixcardproduct' of https://github.com/dnduykhoa/REACTJS_frontend into testbr33
+[33m01edaf7[m[33m ([m[1;31morigin/fixcardproduct[m[33m)[m fix card product, user can edit review, admin reply
+[33me507c46[m Merge pull request #32 from dnduykhoa/testproductreviews
+[33m51c6e16[m[33m ([m[1;31morigin/testproductreviews[m[33m, [m[1;32mtestproductreviews[m[33m)[m review product
+[33m9a3960b[m Merge branch 'productreviews' of https://github.com/dnduykhoa/REACTJS_frontend into testproductreviews
+[33mb0a3a7d[m[33m ([m[1;31morigin/productreviews[m[33m)[m Reviews, cart, product details and variant in order
+[33m9d785fd[m Reviews, cart, product details and variant in order
+[33m8440177[m Merge pull request #31 from dnduykhoa/feature/product-qna
+[33m17b4c29[m[33m ([m[1;31morigin/feature/product-qna[m[33m, [m[1;32mfeature/product-qna[m[33m)[m Q&A
+[33m38be6db[m base role
+[33m02de200[m fix cart
+[33md261369[m Merge pull request #30 from dnduykhoa/Voucher
+[33m4342acc[m[33m ([m[1;31morigin/Voucher[m[33m)[m ThemTinhNangVoucherVaSale
+[33md51e074[m Merge pull request #29 from dnduykhoa/checkp1
+[33mdbaab44[m[33m ([m[1;31morigin/checkp1[m[33m, [m[1;32mcheckp1[m[33m)[m done P1
+[33mf00e68c[m Merge pull request #28 from dnduykhoa/feature/product-status
+[33m2604bca[m[33m ([m[1;31morigin/feature/product-status[m[33m)[m feat: cap nhat text va them nut dat truoc tren giao dien
+[33m1a58a87[m Merge pull request #27 from dnduykhoa/fix/productform
+[33m58291fd[m[33m ([m[1;31morigin/fix/productform[m[33m, [m[1;32mfix/productform[m[33m)[m fix picture variant
+[33m6a2bab7[m[33m ([m[1;31morigin/feature/product-new-arrival[m[33m)[m Merge pull request #26 from dnduykhoa/fix/productform
+[33m3f168ab[m fix flow variant
+[33mcbd5711[m Merge pull request #25 from dnduykhoa/fix/productform
+[33m13d0893[m fix manager product
+[33m08c4a2d[m Merge pull request #24 from dnduykhoa/fix/productform
+[33mccd8f11[m fix productform flow
+[33m058d77a[m Merge pull request #23 from dnduykhoa/SuaFilter
+[33m6b9b7b6[m[33m ([m[1;31morigin/SuaFilter[m[33m)[m sửaFilter
+[33m239aac7[m Merge pull request #22 from dnduykhoa/fix_payment
+[33m92f3c67[m[33m ([m[1;31morigin/fix_payment[m[33m)[m fix payment and email
+[33ma1ebc58[m Merge pull request #21 from dnduykhoa/ListThuocTinh
+[33md5ff685[m[33m ([m[1;31morigin/ListThuocTinh[m[33m)[m SuaThuocTinh
+[33mbb80b77[m Merge pull request #20 from dnduykhoa/fix_ordersuccess
+[33m28f171d[m[33m ([m[1;31morigin/fix_ordersuccess[m[33m)[m fix order success screen
+[33m8082bf4[m Update checkout
+[33mea8aab2[m Merge pull request #19 from dnduykhoa/feature/product-variant-management
+[33mada6a78[m[33m ([m[1;31morigin/feature/product-variant-management[m[33m, [m[1;32mfeature/product-variant-management[m[33m)[m update product-variant-management
+[33m531eb14[m Merge pull request #18 from dnduykhoa/admin_order
+[33m9537b79[m[33m ([m[1;31morigin/admin_order[m[33m)[m admin order and fix phone number
+[33m2e8d9ec[m Merge pull request #17 from dnduykhoa/LoadError
+[33m034d54c[m[33m ([m[1;31morigin/LoadError[m[33m)[m SuaLoiLoadGioHang
+[33mccc85e8[m Merge pull request #16 from dnduykhoa/pushfile
+[33mef2b345[m[33m ([m[1;31morigin/pushfile[m[33m, [m[1;32mpushfile[m[33m)[m push productSlug
+[33m6bbc434[m Merge pull request #15 from dnduykhoa/fix_buynow
+[33mb051824[m Merge pull request #14 from dnduykhoa/update/producturl
+[33mb0b1029[m[33m ([m[1;31morigin/update/producturl[m[33m, [m[1;32mupdate/producturl[m[33m)[m update product url
+[33me217336[m Merge pull request #13 from dnduykhoa/feature/product-variant
+[33m2a586a1[m[33m ([m[1;31morigin/feature/product-variant[m[33m, [m[1;32mfeature/product-variant[m[33m)[m fix product form
+[33mc009434[m[33m ([m[1;31morigin/fix_buynow[m[33m)[m fix_buynow
+[33mb28e118[m Merge pull request #12 from dnduykhoa/feature/product-variant
+[33maf8dff9[m add productvariant
+[33md46abc4[m Giữ nguyên các ký tự xuống dòng và cho phép các trường nhiều dòng.
+[33m1af7dd8[m Merge pull request #11 from dnduykhoa/fix_checkout
+[33me309af0[m[33m ([m[1;31morigin/fix_checkout[m[33m)[m fix_checkout and payment
+[33mc6e89a4[m Push new file pagination
+[33mdf27d18[m Merge pull request #10 from dnduykhoa/update/cart
+[33mf8999f6[m[33m ([m[1;31morigin/update/cart[m[33m, [m[1;32mupdate/cart[m[33m)[m update code bg for cart
+[33mea45001[m Merge pull request #9 from dnduykhoa/banner
+[33m3b5f035[m[33m ([m[1;31morigin/banner[m[33m)[m fix_banner
+[33m708580c[m Merge pull request #8 from dnduykhoa/ThanhToan
+[33mfccf157[m[33m ([m[1;31morigin/ThanhToan[m[33m)[m ThemFEThanhToan
+[33m90edbb8[m Merge pull request #7 from dnduykhoa/fix/jwt
+[33m39f1169[m[33m ([m[1;31morigin/fix/jwt[m[33m, [m[1;32mfix/jwt[m[33m)[m fix jwt error bg
+[33m38b63df[m fix_auth
+[33m4b20786[m remember_me
+[33m2ff8209[m Xử lý trạng thái sản phẩm (ngừng hoạt động / hết hàng) trên toàn bộ ứng dụng
+[33m33549da[m Merge pull request #6 from dnduykhoa/feature/nhap-thuoc-tinh
+[33mcef1d9a[m[33m ([m[1;31morigin/feature/nhap-thuoc-tinh[m[33m)[m Update AdminProductForm.tsx
+[33mae7db35[m Merge pull request #5 from dnduykhoa/GioHang
+[33m16c75c0[m[33m ([m[1;31morigin/GioHang[m[33m)[m ThemGioHang
+[33m54a0a9c[m[33m ([m[1;32mupdateattributeDefinition[m[33m)[m Merge pull request #4 from dnduykhoa/fixproduct
+[33m46b196b[m[33m ([m[1;31morigin/fixproduct[m[33m, [m[1;32mfixproduct[m[33m)[m sua giao dien loc san pham
+[33mab2af88[m Merge pull request #3 from dnduykhoa/FixCategories
+[33m2c193a9[m[33m ([m[1;31morigin/FixCategories[m[33m, [m[1;32mFixCategories[m[33m)[m Fix err from AdminCategories and update homepage
+[33me06db59[m Merge pull request #2 from dnduykhoa/FrontEndV2
+[33m6cae27c[m[33m ([m[1;31morigin/FrontEndV2[m[33m)[m Sua front end
+[33m7bdefd0[m Merge pull request #1 from dnduykhoa/feature/admin-user-pages
+[33mbc67c2d[m[33m ([m[1;31morigin/feature/admin-user-pages[m[33m, [m[1;32mfeature/admin-user-pages[m[33m)[m feat: add pages structure for admin and user
+[33m30cf737[m Khởi tạo project
+[33m1d850e2[m Initial commit

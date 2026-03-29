@@ -89,6 +89,7 @@ export interface UserProfileResponse {
   birthDate: string | null;
   provider: string;
   twoFactorEnabled: boolean;
+  active: boolean;
   roles: string[];
 }
 
