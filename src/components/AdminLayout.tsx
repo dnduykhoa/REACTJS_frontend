@@ -171,7 +171,7 @@ export default function AdminLayout() {
           </Link>
         </div>
 
-        <nav className="flex-1 py-4 px-3 overflow-y-auto space-y-0.5">
+        <nav className="flex-1 py-4 px-3 overflow-y-auto no-scrollbar space-y-0.5">
           {visibleNavLinks.map(({ to, label, icon: Icon, exact }) => (
             <NavLink
               key={to}
