@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, backupAuthForPaymentRedirect } from '../context/AuthContext';
 import { getApiErrorMessage, orderApi, reviewApi } from '../api/j2ee';
 import type { OrderItemResponse, OrderResponse, OrderStatus, ReviewResponse } from '../api/j2ee/types';
 import ReviewModal from '../components/ReviewModal';
@@ -190,10 +190,12 @@ export default function OrderDetailPage() {
       setOrder(updated);
 
       if (updated.paymentMethod === 'VNPAY' && updated.vnpayUrl) {
+        backupAuthForPaymentRedirect();
         window.location.href = updated.vnpayUrl;
         return;
       }
       if (updated.paymentMethod === 'MOMO' && updated.momoUrl) {
+        backupAuthForPaymentRedirect();
         window.location.href = updated.momoUrl;
         return;
       }

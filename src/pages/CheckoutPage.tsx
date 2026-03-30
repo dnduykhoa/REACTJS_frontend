@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, backupAuthForPaymentRedirect } from '../context/AuthContext';
 import { getApiErrorMessage, orderApi, saleProgramApi, voucherApi } from '../api/j2ee';
 import type { CartItemResponse, PaymentMethod, ProductMedia, ProductStatus, SaleProgram } from '../api/j2ee/types';
 import { cartApi } from '../api/j2ee/cartApi';
@@ -369,6 +369,7 @@ export default function CheckoutPage() {
       // Nếu VNPAY → redirect ngay sang cổng thanh toán, xóa giỏ hàng qua API (không qua context để tránh re-render)
       if (paymentMethod === 'VNPAY' && order.vnpayUrl) {
         if (!isBuyNow && user) cartApi.clearCart(user.userId).catch(() => {});
+        backupAuthForPaymentRedirect();
         window.location.href = order.vnpayUrl;
         return;
       }
@@ -376,6 +377,7 @@ export default function CheckoutPage() {
       // Nếu MoMo → redirect ngay sang cổng thanh toán MoMo, xóa giỏ hàng qua API (không qua context để tránh re-render)
       if (paymentMethod === 'MOMO' && order.momoUrl) {
         if (!isBuyNow && user) cartApi.clearCart(user.userId).catch(() => {});
+        backupAuthForPaymentRedirect();
         window.location.href = order.momoUrl;
         return;
       }

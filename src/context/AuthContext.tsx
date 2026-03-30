@@ -22,12 +22,50 @@ const STORAGE_KEY = 'j2ee_user';
 const TOKEN_KEY = 'j2ee_token';
 const REFRESH_KEY = 'j2ee_refresh_token';
 const AUTH_EVENT_KEY = 'j2ee_auth_event';
+const PAYMENT_BACKUP_KEY = 'j2ee_payment_backup';
+
+/**
+ * Gọi trước khi redirect sang cổng thanh toán (VNPay/MoMo).
+ * Backup sessionStorage auth vào localStorage tạm để tránh mất session
+ * khi browser navigate qua domain ngoài rồi quay về.
+ */
+export function backupAuthForPaymentRedirect() {
+  const user = sessionStorage.getItem(STORAGE_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const refresh = sessionStorage.getItem(REFRESH_KEY);
+  if (token && user) {
+    localStorage.setItem(PAYMENT_BACKUP_KEY, JSON.stringify({
+      user,
+      token,
+      refresh,
+      expires: Date.now() + 30 * 60 * 1000, // hết hạn sau 30 phút
+    }));
+  }
+}
 
 const normalizeRole = (role: string) => role.replace(/^ROLE_/, '').toUpperCase();
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<LoginResponse | null>(() => {
     try {
+      // Khôi phục session bị mất sau khi redirect từ cổng thanh toán (VNPay/MoMo)
+      const backupRaw = localStorage.getItem(PAYMENT_BACKUP_KEY);
+      if (backupRaw) {
+        const backup = JSON.parse(backupRaw) as { user: string; token: string; refresh: string; expires: number };
+        if (backup.expires > Date.now() && backup.token) {
+          // Restore về sessionStorage (đúng với trạng thái "không nhớ đăng nhập")
+          sessionStorage.setItem(STORAGE_KEY, backup.user);
+          sessionStorage.setItem(TOKEN_KEY, backup.token);
+          sessionStorage.setItem(REFRESH_KEY, backup.refresh || '');
+          // Xóa localStorage backup và các key chính (không nên lưu lâu dài)
+          localStorage.removeItem(PAYMENT_BACKUP_KEY);
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(REFRESH_KEY);
+          return JSON.parse(backup.user) as LoginResponse;
+        }
+        localStorage.removeItem(PAYMENT_BACKUP_KEY);
+      }
       const raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
       return raw ? (JSON.parse(raw) as LoginResponse) : null;
     } catch {
