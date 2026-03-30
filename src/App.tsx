@@ -29,7 +29,7 @@ import AdminCategories from './pages/admin/AdminCategories';
 import AdminBrands from './pages/admin/AdminBrands';
 import AdminAttributeGroups from './pages/admin/AdminAttributeGroups';
 import AdminAttributeDefinitions from './pages/admin/AdminAttributeDefinitions';
-import AdminCategoryAttributes from './pages/admin/AdminCategoryAttributes';
+import AdminCategoryAttributeSchema from './pages/admin/AdminCategoryAttributeSchema';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminCarousel from './pages/admin/AdminCarousel';
 import AdminOrders from './pages/admin/AdminOrders';
@@ -75,7 +75,7 @@ export default function App() {
             <Route path="brands" element={<AdminBrands />} />
             <Route path="attribute-groups" element={<AdminAttributeGroups />} />
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
-            <Route path="category-attributes" element={<AdminCategoryAttributes />} />
+            <Route path="category-attributes" element={<AdminCategoryAttributeSchema />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
@@ -98,7 +98,7 @@ export default function App() {
             <Route path="brands" element={<AdminBrands />} />
             <Route path="attribute-groups" element={<AdminAttributeGroups />} />
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
-            <Route path="category-attributes" element={<AdminCategoryAttributes />} />
+            <Route path="category-attributes" element={<AdminCategoryAttributeSchema />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
@@ -121,7 +121,7 @@ export default function App() {
             <Route path="brands" element={<AdminBrands />} />
             <Route path="attribute-groups" element={<AdminAttributeGroups />} />
             <Route path="attribute-definitions" element={<AdminAttributeDefinitions />} />
-            <Route path="category-attributes" element={<AdminCategoryAttributes />} />
+            <Route path="category-attributes" element={<AdminCategoryAttributeSchema />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="trusted-devices" element={<AdminTrustedDevices />} />
             <Route path="product-questions" element={<AdminProductQuestions />} />
